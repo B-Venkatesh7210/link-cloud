@@ -1,15 +1,17 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from "react";
 import {
   ReactFlow,
   ReactFlowProvider,
   useReactFlow,
+  useNodesInitialized,
   applyNodeChanges,
   type Node,
   type OnNodeDrag,
   type OnNodesChange,
   type NodeTypes,
+  type CoordinateExtent,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { Plus } from "lucide-react";
@@ -23,6 +25,12 @@ import {
 } from "@/components/cloud/url-bubble-node";
 import { ViewportControls } from "@/components/cloud/viewport-controls";
 import { Button } from "@/components/ui/button";
+import {
+  BUBBLE_FOOTPRINT,
+  cloudTranslateExtent,
+  contentOverflowsViewport,
+  toOccupiedBox,
+} from "@/lib/cloud/layout";
 import {
   archiveLinkAction,
   recordLinkOpenAction,
@@ -49,30 +57,56 @@ function useIsNarrow(maxWidth = 639) {
   return narrow;
 }
 
-function CameraBootstrap({
-  linkCount,
+function useViewportSize() {
+  const [size, setSize] = useState({ width: 1280, height: 800 });
+  useEffect(() => {
+    const update = () =>
+      setSize({ width: window.innerWidth, height: window.innerHeight });
+    update();
+    window.addEventListener("resize", update);
+    return () => window.removeEventListener("resize", update);
+  }, []);
+  return size;
+}
+
+/** Frames all bubbles whenever the link set settles; skips search / drag. */
+function CameraController({
+  layoutKey,
   searching,
+  draggingRef,
 }: {
-  linkCount: number;
+  layoutKey: string;
   searching: boolean;
+  draggingRef: MutableRefObject<boolean>;
 }) {
-  const { fitView, setViewport } = useReactFlow();
-  const booted = useRef(false);
+  const { fitView } = useReactFlow();
+  const nodesInitialized = useNodesInitialized();
+  const lastKeyRef = useRef<string | null>(null);
+  const wasSearchingRef = useRef(searching);
 
   useEffect(() => {
-    if (booted.current || searching || linkCount === 0) return;
-    booted.current = true;
+    const exitedSearch = wasSearchingRef.current && !searching;
+    wasSearchingRef.current = searching;
+
+    if (!nodesInitialized || searching || draggingRef.current || !layoutKey) {
+      return;
+    }
+
+    const keyChanged = lastKeyRef.current !== layoutKey;
+    if (!keyChanged && !exitedSearch) return;
+    lastKeyRef.current = layoutKey;
 
     const id = window.setTimeout(() => {
-      if (linkCount <= 15) {
-        fitView({ padding: 0.28, duration: 420, maxZoom: 1.05, minZoom: 0.55 });
-      } else {
-        setViewport({ x: 120, y: 80, zoom: 0.92 }, { duration: 360 });
-      }
-    }, 60);
+      void fitView({
+        padding: 0.22,
+        duration: 380,
+        maxZoom: 1.05,
+        minZoom: 0.45,
+      });
+    }, 40);
 
     return () => window.clearTimeout(id);
-  }, [fitView, linkCount, searching, setViewport]);
+  }, [draggingRef, fitView, layoutKey, nodesInitialized, searching]);
 
   return null;
 }
@@ -90,6 +124,7 @@ function CloudCanvasInner() {
   } = useAppState();
 
   const isMobile = useIsNarrow(639);
+  const viewportSize = useViewportSize();
   const canDrag = !isMobile && !searchQuery.trim();
   const [nodes, setNodes] = useState<UrlBubbleFlowNode[]>([]);
   const [deferredQuery, setDeferredQuery] = useState(searchQuery);
@@ -116,6 +151,36 @@ function CloudCanvasInner() {
   const matchedCount = presented.filter((p) => p.matched && searching).length;
   const selectedLink =
     activeLinks.find((link) => link.id === selectedLinkId) ?? null;
+
+  const layoutKey = useMemo(
+    () =>
+      activeLinks
+        .map((link) => link.id)
+        .sort()
+        .join("|"),
+    [activeLinks]
+  );
+
+  const occupiedBoxes = useMemo(
+    () =>
+      activeLinks.map((link) =>
+        toOccupiedBox(
+          { x: link.position_x, y: link.position_y },
+          BUBBLE_FOOTPRINT.medium
+        )
+      ),
+    [activeLinks]
+  );
+
+  const translateExtent = useMemo<CoordinateExtent>(
+    () => cloudTranslateExtent(occupiedBoxes),
+    [occupiedBoxes]
+  );
+
+  const overflowsViewport = useMemo(
+    () => contentOverflowsViewport(occupiedBoxes, viewportSize),
+    [occupiedBoxes, viewportSize]
+  );
 
   const updateLinkLocal = useCallback(
     (id: string, patch: Partial<LinkWithTags>) => {
@@ -330,8 +395,8 @@ function CloudCanvasInner() {
       const origin = dragOriginRef.current.get(node.id);
       dragOriginRef.current.delete(node.id);
 
-      const position_x = node.position.x;
-      const position_y = node.position.y;
+      const position_x = Math.round(node.position.x * 100) / 100;
+      const position_y = Math.round(node.position.y * 100) / 100;
 
       updateLinkLocal(node.id, { position_x, position_y });
 
@@ -396,14 +461,21 @@ function CloudCanvasInner() {
         zoomOnPinch
         panOnDrag
         selectionOnDrag={false}
-        minZoom={0.3}
+        minZoom={overflowsViewport ? 0.35 : 0.7}
         maxZoom={2.2}
+        translateExtent={translateExtent}
+        fitView
+        fitViewOptions={{ padding: 0.22, maxZoom: 1.05, minZoom: 0.45 }}
         proOptions={{ hideAttribution: true }}
         defaultViewport={{ x: 0, y: 0, zoom: 1 }}
         className="linkcloud-flow bg-transparent!"
         onlyRenderVisibleElements={activeLinks.length > 80}
       >
-        <CameraBootstrap linkCount={activeLinks.length} searching={searching} />
+        <CameraController
+          layoutKey={layoutKey}
+          searching={searching}
+          draggingRef={draggingRef}
+        />
         {activeLinks.length > 0 ? <ViewportControls /> : null}
       </ReactFlow>
 

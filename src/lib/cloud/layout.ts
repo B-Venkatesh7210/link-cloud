@@ -5,6 +5,13 @@ export type SizedBox = Point & {
   height: number;
 };
 
+export type ContentBounds = {
+  minX: number;
+  minY: number;
+  maxX: number;
+  maxY: number;
+};
+
 /** Approximate bubble footprint used for packing / collision. */
 export const BUBBLE_FOOTPRINT = {
   small: { width: 168, height: 78 },
@@ -12,7 +19,11 @@ export const BUBBLE_FOOTPRINT = {
   large: { width: 228, height: 98 },
 } as const;
 
-export const DEFAULT_SPACING = 88;
+/** Tighter gap so ~12–20 links stay in one screen. */
+export const DEFAULT_SPACING = 52;
+
+/** Extra margin around content for pan clamp / fit padding feel. */
+export const CLOUD_EDGE_PADDING = 140;
 
 function mulberry32(seed: number) {
   let t = seed >>> 0;
@@ -33,28 +44,32 @@ function boxesOverlap(a: SizedBox, b: SizedBox, padding: number): boolean {
   );
 }
 
+/**
+ * Compact rings first — small clouds stay near the origin so one
+ * desktop viewport can frame them. Grows only as count rises.
+ */
 function ringRadius(index: number): number {
-  if (index < 6) return 210;
-  if (index < 14) return 420;
-  if (index < 24) return 640;
-  if (index < 36) return 880;
-  return 880 + Math.floor((index - 36) / 14) * 240;
+  if (index < 8) return 120;
+  if (index < 16) return 230;
+  if (index < 28) return 360;
+  if (index < 42) return 510;
+  return 510 + Math.floor((index - 42) / 16) * 150;
 }
 
 /**
  * Deterministic candidate from visual_seed + existing count.
- * Spread across rings so ~20–30 nodes fill a comfortable desktop viewport.
+ * Early rings fill a comfortable single viewport; later rings expand.
  */
 export function candidateFromSeed(
   visualSeed: number,
   existingCount: number
 ): Point {
   const rand = mulberry32(visualSeed ^ (existingCount * 9973));
-  const radius = ringRadius(existingCount) + (rand() - 0.5) * 40;
+  const radius = ringRadius(existingCount) + (rand() - 0.5) * 28;
   const angle =
     ((visualSeed % 360) / 360) * Math.PI * 2 +
     existingCount * 2.399963 +
-    rand() * 0.35;
+    rand() * 0.28;
 
   return {
     x: Math.cos(angle) * radius,
@@ -124,6 +139,74 @@ export function toOccupiedBox(
     width: size.width,
     height: size.height,
   };
+}
+
+/** Axis-aligned union of bubble boxes. */
+export function contentBoundsFromBoxes(
+  boxes: SizedBox[],
+  padding = CLOUD_EDGE_PADDING
+): ContentBounds | null {
+  if (boxes.length === 0) return null;
+
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+
+  for (const box of boxes) {
+    minX = Math.min(minX, box.x);
+    minY = Math.min(minY, box.y);
+    maxX = Math.max(maxX, box.x + box.width);
+    maxY = Math.max(maxY, box.y + box.height);
+  }
+
+  return {
+    minX: minX - padding,
+    minY: minY - padding,
+    maxX: maxX + padding,
+    maxY: maxY + padding,
+  };
+}
+
+/**
+ * Pan clamp for React Flow `translateExtent`.
+ * Grows with content; for small clouds stays tight so you can't wander
+ * into empty infinite sky. When content is smaller than the viewport,
+ * the extent stays content-sized (d3-zoom then effectively locks pan).
+ */
+export function cloudTranslateExtent(
+  boxes: SizedBox[],
+  options?: { padding?: number }
+): [[number, number], [number, number]] {
+  const padding = options?.padding ?? CLOUD_EDGE_PADDING;
+  const bounds = contentBoundsFromBoxes(boxes, padding);
+
+  if (!bounds) {
+    const halfW = 480;
+    const halfH = 320;
+    return [
+      [-halfW, -halfH],
+      [halfW, halfH],
+    ];
+  }
+
+  return [
+    [bounds.minX, bounds.minY],
+    [bounds.maxX, bounds.maxY],
+  ];
+}
+
+/** Whether content is larger than a typical visible frame at zoom ~1. */
+export function contentOverflowsViewport(
+  boxes: SizedBox[],
+  viewport: { width: number; height: number },
+  padding = CLOUD_EDGE_PADDING
+): boolean {
+  const bounds = contentBoundsFromBoxes(boxes, padding);
+  if (!bounds) return false;
+  const w = bounds.maxX - bounds.minX;
+  const h = bounds.maxY - bounds.minY;
+  return w > viewport.width * 0.95 || h > viewport.height * 0.92;
 }
 
 /**

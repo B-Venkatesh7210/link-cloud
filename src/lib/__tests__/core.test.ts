@@ -11,6 +11,8 @@ import {
   placeNewLink,
   resolveCollision,
   toOccupiedBox,
+  cloudTranslateExtent,
+  contentOverflowsViewport,
   BUBBLE_FOOTPRINT,
 } from "@/lib/cloud/layout";
 import type { LinkWithTags } from "@/lib/types";
@@ -118,6 +120,51 @@ describe("layout collision", () => {
     expect(Number.isFinite(resolved.x)).toBe(true);
     expect(
       Math.abs(resolved.x) > 50 || Math.abs(resolved.y) > 50
+    ).toBe(true);
+  });
+
+  it("keeps early links in a compact cloud near the origin", () => {
+    const occupied: ReturnType<typeof toOccupiedBox>[] = [];
+    const points = [];
+    for (let i = 0; i < 8; i += 1) {
+      const point = placeNewLink({
+        visualSeed: 1000 + i * 97,
+        existingCount: i,
+        occupied,
+      });
+      points.push(point);
+      occupied.push(toOccupiedBox(point));
+    }
+
+    const maxDist = Math.max(
+      ...points.map((p) => Math.hypot(p.x + 98, p.y + 44))
+    );
+    // First ring + footprint should stay well inside a typical desktop frame.
+    expect(maxDist).toBeLessThan(420);
+  });
+
+  it("builds a finite translate extent from content", () => {
+    const boxes = [
+      toOccupiedBox({ x: -100, y: -80 }),
+      toOccupiedBox({ x: 120, y: 40 }),
+    ];
+    const extent = cloudTranslateExtent(boxes, { padding: 50 });
+    expect(extent[0][0]).toBeLessThan(extent[1][0]);
+    expect(extent[0][1]).toBeLessThan(extent[1][1]);
+    expect(Number.isFinite(extent[0][0])).toBe(true);
+    expect(Number.isFinite(extent[1][0])).toBe(true);
+    expect(
+      contentOverflowsViewport(boxes, { width: 1280, height: 800 }, 50)
+    ).toBe(false);
+    expect(
+      contentOverflowsViewport(
+        [
+          toOccupiedBox({ x: -900, y: -700 }),
+          toOccupiedBox({ x: 900, y: 700 }),
+        ],
+        { width: 1280, height: 800 },
+        50
+      )
     ).toBe(true);
   });
 });
