@@ -9,6 +9,8 @@ import {
   type ReactNode,
   type RefObject,
 } from "react";
+import { toast } from "sonner";
+import { findLinkByUrl } from "@/lib/normalize-url";
 import type { LinkWithTags } from "@/lib/types";
 
 type AppStateContextValue = {
@@ -25,6 +27,8 @@ type AppStateContextValue = {
   editingLink: LinkWithTags | null;
   openEditLink: (id: string) => void;
   closeEditLink: () => void;
+  /** Close dialogs, search for this link, and select it on the canvas. */
+  revealLinkOnCanvas: (link: LinkWithTags) => void;
   searchInputRef: RefObject<HTMLInputElement | null> | null;
   registerSearchInput: (ref: RefObject<HTMLInputElement | null>) => void;
   allTagNames: string[];
@@ -48,11 +52,111 @@ export function AppStateProvider({
   const [searchInputRef, setSearchInputRef] =
     useState<RefObject<HTMLInputElement | null> | null>(null);
 
-  const openAddLink = useCallback((initialUrl = "") => {
-    setEditingLink(null);
-    setAddLinkInitialUrl(initialUrl);
-    setIsAddLinkOpen(true);
-  }, []);
+  const revealLinkOnCanvas = useCallback(
+    (link: LinkWithTags) => {
+      // #region agent log
+      fetch("http://127.0.0.1:7862/ingest/e3f614d5-48ef-46ea-98fe-f235c91961c9", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Debug-Session-Id": "ddc618",
+        },
+        body: JSON.stringify({
+          sessionId: "ddc618",
+          runId: "pre-fix",
+          hypothesisId: "B",
+          location: "app-state.tsx:revealLinkOnCanvas",
+          message: "revealLinkOnCanvas called",
+          data: {
+            linkId: link.id,
+            archived: Boolean(link.archived_at),
+            labelLen: link.label.length,
+          },
+          timestamp: Date.now(),
+        }),
+      }).catch(() => {});
+      // #endregion
+      setIsAddLinkOpen(false);
+      setAddLinkInitialUrl("");
+      setEditingLink(null);
+      setSelectedLinkId(link.id);
+      const query = link.label.trim() || link.hostname || link.url;
+      setSearchQuery(query);
+      window.setTimeout(() => {
+        searchInputRef?.current?.focus();
+        searchInputRef?.current?.select();
+      }, 30);
+    },
+    [searchInputRef]
+  );
+
+  const openAddLink = useCallback(
+    (initialUrl = "") => {
+      const trimmed = initialUrl.trim();
+      // #region agent log
+      fetch("http://127.0.0.1:7862/ingest/e3f614d5-48ef-46ea-98fe-f235c91961c9", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Debug-Session-Id": "ddc618",
+        },
+        body: JSON.stringify({
+          sessionId: "ddc618",
+          runId: "pre-fix",
+          hypothesisId: "B",
+          location: "app-state.tsx:openAddLink",
+          message: "openAddLink called",
+          data: {
+            hasUrl: Boolean(trimmed),
+            urlLen: trimmed.length,
+            linkCount: links.length,
+          },
+          timestamp: Date.now(),
+        }),
+      }).catch(() => {});
+      // #endregion
+      if (trimmed) {
+        const existing = findLinkByUrl(links, trimmed);
+        if (existing) {
+          // #region agent log
+          fetch(
+            "http://127.0.0.1:7862/ingest/e3f614d5-48ef-46ea-98fe-f235c91961c9",
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "X-Debug-Session-Id": "ddc618",
+              },
+              body: JSON.stringify({
+                sessionId: "ddc618",
+                runId: "pre-fix",
+                hypothesisId: "B",
+                location: "app-state.tsx:openAddLink:duplicate",
+                message: "duplicate detected — revealing",
+                data: { existingId: existing.id },
+                timestamp: Date.now(),
+              }),
+            }
+          ).catch(() => {});
+          // #endregion
+          revealLinkOnCanvas(existing);
+          // Defer toast so it never runs inside another component's render/update.
+          queueMicrotask(() => {
+            toast.message(
+              existing.archived_at
+                ? "Already saved (archived) — showing that link"
+                : "Already in your sky — showing that link"
+            );
+          });
+          return;
+        }
+      }
+      setEditingLink(null);
+      setAddLinkInitialUrl(initialUrl);
+      setIsAddLinkOpen(true);
+    },
+    [links, revealLinkOnCanvas]
+  );
 
   const closeAddLink = useCallback(() => {
     setIsAddLinkOpen(false);
@@ -106,6 +210,7 @@ export function AppStateProvider({
       editingLink,
       openEditLink,
       closeEditLink,
+      revealLinkOnCanvas,
       searchInputRef,
       registerSearchInput,
       allTagNames,
@@ -121,6 +226,7 @@ export function AppStateProvider({
       editingLink,
       openEditLink,
       closeEditLink,
+      revealLinkOnCanvas,
       searchInputRef,
       registerSearchInput,
       allTagNames,

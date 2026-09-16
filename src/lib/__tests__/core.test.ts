@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { normalizeUrl, isValidHttpUrl } from "@/lib/normalize-url";
+import {
+  normalizeUrl,
+  isValidHttpUrl,
+  findLinkByUrl,
+  normalizedUrlVariants,
+} from "@/lib/normalize-url";
 import { isBlockedHostname, isPrivateOrReservedIp } from "@/lib/metadata/ssrf";
 import { normalizeTagName, displayTagName } from "@/lib/helpers";
 import {
@@ -58,6 +63,26 @@ describe("normalizeUrl", () => {
   it("rejects dangerous protocols", () => {
     expect(isValidHttpUrl("javascript:alert(1)")).toBe(false);
     expect(isValidHttpUrl("file:///etc/passwd")).toBe(false);
+  });
+
+  it("matches www and non-www as the same saved link", () => {
+    const variants = normalizedUrlVariants(
+      normalizeUrl("https://www.example.com/app").normalized
+    );
+    expect(variants.some((v) => v.includes("://example.com/"))).toBe(true);
+    expect(variants.some((v) => v.includes("://www.example.com/"))).toBe(true);
+
+    const links = [
+      fakeLink({
+        id: "1",
+        label: "Example",
+        url: "https://www.example.com/app",
+        normalized_url: "https://www.example.com/app",
+        hostname: "www.example.com",
+      }),
+    ];
+    expect(findLinkByUrl(links, "https://example.com/app")?.id).toBe("1");
+    expect(findLinkByUrl(links, "example.com/app")?.id).toBe("1");
   });
 });
 

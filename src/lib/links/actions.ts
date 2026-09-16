@@ -2,7 +2,12 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { normalizeUrl, UrlNormalizationError } from "@/lib/normalize-url";
+import {
+  normalizeUrl,
+  normalizedUrlVariants,
+  findLinkByUrl,
+  UrlNormalizationError,
+} from "@/lib/normalize-url";
 import { createLinkSchema, updateLinkSchema } from "@/lib/schemas";
 import type {
   ActionResult,
@@ -136,6 +141,24 @@ function revalidateApp() {
 export async function createLinkAction(
   input: CreateLinkInput
 ): Promise<ActionResult<LinkWithTags>> {
+  // #region agent log
+  fetch("http://127.0.0.1:7862/ingest/e3f614d5-48ef-46ea-98fe-f235c91961c9", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Debug-Session-Id": "ddc618",
+    },
+    body: JSON.stringify({
+      sessionId: "ddc618",
+      runId: "pre-fix",
+      hypothesisId: "D",
+      location: "actions.ts:createLinkAction:entry",
+      message: "createLinkAction entry",
+      data: { hasUrl: Boolean(input?.url), labelLen: input?.label?.length ?? 0 },
+      timestamp: Date.now(),
+    }),
+  }).catch(() => {});
+  // #endregion
   const parsed = createLinkSchema.safeParse(input);
   if (!parsed.success) {
     return {
@@ -164,14 +187,33 @@ export async function createLinkAction(
     };
   }
 
-  const { data: existing } = await supabase
+  const { data: duplicateRows } = await supabase
     .from("links")
-    .select("id")
+    .select("id, normalized_url")
     .eq("user_id", userId)
-    .eq("normalized_url", normalized.normalized)
-    .maybeSingle();
+    .in("normalized_url", normalizedUrlVariants(normalized.normalized));
+
+  const existing = duplicateRows?.[0];
 
   if (existing) {
+    // #region agent log
+    fetch("http://127.0.0.1:7862/ingest/e3f614d5-48ef-46ea-98fe-f235c91961c9", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Debug-Session-Id": "ddc618",
+      },
+      body: JSON.stringify({
+        sessionId: "ddc618",
+        runId: "pre-fix",
+        hypothesisId: "D",
+        location: "actions.ts:createLinkAction:duplicate",
+        message: "server duplicate hit",
+        data: { existingId: existing.id },
+        timestamp: Date.now(),
+      }),
+    }).catch(() => {});
+    // #endregion
     const links = await getLinksForCurrentUser({ includeArchived: true });
     const existingLink = links.find((link) => link.id === existing.id);
 
@@ -219,6 +261,16 @@ export async function createLinkAction(
       .single();
 
     if (error || !link) {
+      if (error?.code === "23505") {
+        const links = await getLinksForCurrentUser({ includeArchived: true });
+        const existingLink = findLinkByUrl(links, normalized.normalized);
+        return {
+          success: false,
+          error: "You already saved this link.",
+          code: "DUPLICATE",
+          existing: existingLink ?? undefined,
+        };
+      }
       return {
         success: false,
         error: "Couldn't save the link. Try again.",
@@ -520,7 +572,8 @@ export async function recordLinkOpenAction(
     };
   }
 
-  revalidateApp();
+  // Client already updates optimistically — skip revalidatePath to avoid
+  // Router updates colliding with in-flight React state transitions.
   return { success: true, data: { id: linkId, open_count, last_opened_at } };
 }
 

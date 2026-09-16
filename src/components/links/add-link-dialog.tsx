@@ -36,12 +36,11 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
   createLinkAction,
-  mergeTagsIntoLinkAction,
   updateLinkAction,
 } from "@/lib/links/actions";
 import { fetchLinkMetadataAction } from "@/lib/metadata/actions";
 import { createLinkFormSchema, type CreateLinkFormValues } from "@/lib/schemas";
-import { normalizeUrl } from "@/lib/normalize-url";
+import { normalizeUrl, findLinkByUrl } from "@/lib/normalize-url";
 import type { LinkWithTags } from "@/lib/types";
 
 function useIsMobile() {
@@ -90,8 +89,7 @@ function LinkForm({
   onSaved: (link?: LinkWithTags) => void;
   focusLabel?: boolean;
 }) {
-  const { setLinks, allTagNames, openEditLink, setSelectedLinkId } =
-    useAppState();
+  const { setLinks, allTagNames, revealLinkOnCanvas, links } = useAppState();
   const [tags, setTags] = useState<string[]>(
     initialLink?.tags.map((tag) => tag.name) ?? []
   );
@@ -110,7 +108,6 @@ function LinkForm({
     description: initialLink?.description ?? null,
     favicon_url: initialLink?.favicon_url ?? null,
   });
-  const [duplicate, setDuplicate] = useState<LinkWithTags | null>(null);
   const labelTouchedRef = useRef(Boolean(initialLink));
   const labelRef = useRef<HTMLInputElement | null>(null);
   const urlRef = useRef<HTMLInputElement | null>(null);
@@ -214,6 +211,18 @@ function LinkForm({
         return;
       }
 
+      const localExisting = findLinkByUrl(links, values.url);
+      if (localExisting) {
+        revealLinkOnCanvas(localExisting);
+        toast.message(
+          localExisting.archived_at
+            ? "Already saved (archived) — showing that link"
+            : "Already in your sky — showing that link"
+        );
+        onCancel();
+        return;
+      }
+
       const result = await createLinkAction({
         ...values,
         tags,
@@ -225,7 +234,9 @@ function LinkForm({
 
       if (!result.success) {
         if (result.code === "DUPLICATE" && result.existing) {
-          setDuplicate(result.existing);
+          revealLinkOnCanvas(result.existing);
+          toast.message("Already in your sky — showing that link");
+          onCancel();
           return;
         }
         toast.error(result.error);
@@ -239,90 +250,6 @@ function LinkForm({
       toast.success("Link saved");
       onSaved(result.data);
     });
-  }
-
-  if (duplicate) {
-    const incomingTags = tags.filter(
-      (tag) =>
-        !duplicate.tags.some(
-          (existing) => existing.name.toLowerCase() === tag.toLowerCase()
-        )
-    );
-
-    return (
-      <div className="space-y-4">
-        <div className="rounded-2xl bg-sky-50/80 px-4 py-3">
-          <p className="text-sm font-medium text-slate-800">
-            You already saved this link.
-          </p>
-          <p className="mt-1 truncate text-sm text-slate-500">
-            {duplicate.label} · {duplicate.hostname.replace(/^www\./, "")}
-          </p>
-        </div>
-        <div className="flex flex-col gap-2">
-          <Button
-            type="button"
-            className="h-10 rounded-xl bg-slate-900 text-white hover:bg-slate-800"
-            onClick={() => {
-              window.open(duplicate.url, "_blank", "noopener,noreferrer");
-              onCancel();
-            }}
-          >
-            Open existing
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            className="h-10 rounded-xl"
-            onClick={() => {
-              setSelectedLinkId(duplicate.id);
-              openEditLink(duplicate.id);
-              onCancel();
-            }}
-          >
-            Edit existing
-          </Button>
-          {incomingTags.length > 0 ? (
-            <Button
-              type="button"
-              variant="outline"
-              className="h-10 rounded-xl"
-              disabled={pending}
-              onClick={() => {
-                startTransition(async () => {
-                  const result = await mergeTagsIntoLinkAction(
-                    duplicate.id,
-                    incomingTags
-                  );
-                  if (!result.success) {
-                    toast.error(result.error);
-                    return;
-                  }
-                  setLinks((prev) =>
-                    prev.map((link) =>
-                      link.id === result.data.id ? result.data : link
-                    )
-                  );
-                  toast.success("Tags added to existing link");
-                  onSaved(result.data);
-                });
-              }}
-            >
-              Add {incomingTags.length} tag
-              {incomingTags.length === 1 ? "" : "s"} to existing
-            </Button>
-          ) : null}
-          <Button
-            type="button"
-            variant="ghost"
-            className="h-10 rounded-xl"
-            onClick={() => setDuplicate(null)}
-          >
-            Cancel
-          </Button>
-        </div>
-      </div>
-    );
   }
 
   return (

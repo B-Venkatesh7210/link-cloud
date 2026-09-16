@@ -29,6 +29,7 @@ import {
   BUBBLE_FOOTPRINT,
   cloudTranslateExtent,
   contentOverflowsViewport,
+  searchStageCenter,
   toOccupiedBox,
 } from "@/lib/cloud/layout";
 import {
@@ -97,6 +98,24 @@ function CameraController({
     lastKeyRef.current = layoutKey;
 
     const id = window.setTimeout(() => {
+      // #region agent log
+      fetch("http://127.0.0.1:7862/ingest/e3f614d5-48ef-46ea-98fe-f235c91961c9", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Debug-Session-Id": "ddc618",
+        },
+        body: JSON.stringify({
+          sessionId: "ddc618",
+          runId: "pre-fix",
+          hypothesisId: "C",
+          location: "cloud-canvas.tsx:CameraController",
+          message: "fitView scheduled",
+          data: { layoutKeyLen: layoutKey.length, searching, exitedSearch },
+          timestamp: Date.now(),
+        }),
+      }).catch(() => {});
+      // #endregion
       void fitView({
         padding: 0.22,
         duration: 380,
@@ -107,6 +126,46 @@ function CameraController({
 
     return () => window.clearTimeout(id);
   }, [draggingRef, fitView, layoutKey, nodesInitialized, searching]);
+
+  return null;
+}
+
+/** Centers the viewport on the #1 search hit so it reads as the main stage. */
+function SearchFocusCamera({
+  searching,
+  queryKey,
+  hasMatch,
+  mobile,
+}: {
+  searching: boolean;
+  queryKey: string;
+  hasMatch: boolean;
+  mobile: boolean;
+}) {
+  const { setCenter } = useReactFlow();
+  const nodesInitialized = useNodesInitialized();
+  const lastFocusRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!nodesInitialized || !searching || !hasMatch) {
+      lastFocusRef.current = null;
+      return;
+    }
+
+    const focusKey = queryKey;
+    if (lastFocusRef.current === focusKey) return;
+    lastFocusRef.current = focusKey;
+
+    const id = window.setTimeout(() => {
+      const stage = searchStageCenter({ mobile });
+      void setCenter(stage.x, stage.y, {
+        zoom: mobile ? 0.92 : 1,
+        duration: 420,
+      });
+    }, 60);
+
+    return () => window.clearTimeout(id);
+  }, [hasMatch, mobile, nodesInitialized, queryKey, searching, setCenter]);
 
   return null;
 }
@@ -172,10 +231,15 @@ function CloudCanvasInner() {
     [activeLinks]
   );
 
-  const translateExtent = useMemo<CoordinateExtent>(
-    () => cloudTranslateExtent(occupiedBoxes),
-    [occupiedBoxes]
-  );
+  const translateExtent = useMemo<CoordinateExtent>(() => {
+    const base = cloudTranslateExtent(occupiedBoxes);
+    if (!searching) return base;
+    // Search stage lives around the origin — open the clamp so we can center it.
+    return [
+      [Math.min(base[0][0], -1100), Math.min(base[0][1], -800)],
+      [Math.max(base[1][0], 1100), Math.max(base[1][1], 800)],
+    ];
+  }, [occupiedBoxes, searching]);
 
   const overflowsViewport = useMemo(
     () => contentOverflowsViewport(occupiedBoxes, viewportSize),
@@ -193,40 +257,104 @@ function CloudCanvasInner() {
 
   const handleOpen = useCallback(
     (id: string) => {
+      // #region agent log
+      fetch("http://127.0.0.1:7862/ingest/e3f614d5-48ef-46ea-98fe-f235c91961c9", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Debug-Session-Id": "ddc618",
+        },
+        body: JSON.stringify({
+          sessionId: "ddc618",
+          runId: "pre-fix",
+          hypothesisId: "A",
+          location: "cloud-canvas.tsx:handleOpen:entry",
+          message: "handleOpen entry",
+          data: { id },
+          timestamp: Date.now(),
+        }),
+      }).catch(() => {});
+      // #endregion
+      let snapshot: LinkWithTags | undefined;
+
       setLinks((prev) => {
         const link = prev.find((item) => item.id === id);
         if (!link) return prev;
-
-        window.open(link.url, "_blank", "noopener,noreferrer");
-
-        const nextCount = link.open_count + 1;
-        const nextOpened = new Date().toISOString();
-
-        void recordLinkOpenAction(id).then((result) => {
-          if (!result.success) {
-            setLinks((latest) =>
-              latest.map((item) =>
-                item.id === id
-                  ? {
-                      ...item,
-                      open_count: link.open_count,
-                      last_opened_at: link.last_opened_at,
-                    }
-                  : item
-              )
-            );
-          }
-        });
-
+        snapshot = link;
         return prev.map((item) =>
           item.id === id
             ? {
                 ...item,
-                open_count: nextCount,
-                last_opened_at: nextOpened,
+                open_count: link.open_count + 1,
+                last_opened_at: new Date().toISOString(),
               }
             : item
         );
+      });
+
+      // #region agent log
+      fetch("http://127.0.0.1:7862/ingest/e3f614d5-48ef-46ea-98fe-f235c91961c9", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Debug-Session-Id": "ddc618",
+        },
+        body: JSON.stringify({
+          sessionId: "ddc618",
+          runId: "pre-fix",
+          hypothesisId: "A",
+          location: "cloud-canvas.tsx:handleOpen:afterSetState",
+          message: "handleOpen after setLinks (side effects next)",
+          data: { found: Boolean(snapshot), hasUrl: Boolean(snapshot?.url) },
+          timestamp: Date.now(),
+        }),
+      }).catch(() => {});
+      // #endregion
+
+      if (!snapshot) return;
+
+      const previousCount = snapshot.open_count;
+      const previousOpened = snapshot.last_opened_at;
+      window.open(snapshot.url, "_blank", "noopener,noreferrer");
+
+      void recordLinkOpenAction(id).then((result) => {
+        // #region agent log
+        fetch(
+          "http://127.0.0.1:7862/ingest/e3f614d5-48ef-46ea-98fe-f235c91961c9",
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "X-Debug-Session-Id": "ddc618",
+            },
+            body: JSON.stringify({
+              sessionId: "ddc618",
+              runId: "pre-fix",
+              hypothesisId: "A",
+              location: "cloud-canvas.tsx:handleOpen:actionResult",
+              message: "recordLinkOpenAction resolved",
+              data: {
+                success: result.success,
+                error: result.success ? null : result.error,
+              },
+              timestamp: Date.now(),
+            }),
+          }
+        ).catch(() => {});
+        // #endregion
+        if (!result.success) {
+          setLinks((latest) =>
+            latest.map((item) =>
+              item.id === id
+                ? {
+                    ...item,
+                    open_count: previousCount,
+                    last_opened_at: previousOpened,
+                  }
+                : item
+            )
+          );
+        }
       });
     },
     [setLinks]
@@ -475,6 +603,12 @@ function CloudCanvasInner() {
           layoutKey={layoutKey}
           searching={searching}
           draggingRef={draggingRef}
+        />
+        <SearchFocusCamera
+          searching={searching}
+          queryKey={deferredQuery.trim()}
+          hasMatch={matchedCount > 0}
+          mobile={isMobile}
         />
         {activeLinks.length > 0 ? <ViewportControls /> : null}
       </ReactFlow>

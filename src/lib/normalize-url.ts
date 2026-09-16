@@ -90,6 +90,58 @@ export function normalizeUrl(input: string): NormalizedUrl {
   };
 }
 
+/** www and non-www forms of the same URL for dedupe lookups. */
+export function normalizedUrlVariants(normalized: string): string[] {
+  let parsed: URL;
+  try {
+    parsed = new URL(normalized);
+  } catch {
+    return [normalized];
+  }
+
+  const variants = new Set<string>([normalized]);
+  const host = parsed.hostname.toLowerCase();
+
+  if (host.startsWith("www.")) {
+    parsed.hostname = host.slice(4);
+  } else if (host.includes(".")) {
+    parsed.hostname = `www.${host}`;
+  }
+
+  variants.add(parsed.toString());
+  return Array.from(variants);
+}
+
+/**
+ * Find a saved link that matches this URL (normalized, www-tolerant).
+ * Prefers active (non-archived) links when both exist.
+ */
+export function findLinkByUrl<
+  T extends { normalized_url: string; url: string; archived_at: string | null },
+>(links: T[], input: string): T | null {
+  let variants: string[];
+  try {
+    variants = normalizedUrlVariants(normalizeUrl(input).normalized);
+  } catch {
+    return null;
+  }
+
+  const variantSet = new Set(variants);
+  const matches = links.filter((link) => {
+    if (variantSet.has(link.normalized_url)) return true;
+    try {
+      return variantSet.has(normalizeUrl(link.url).normalized);
+    } catch {
+      return false;
+    }
+  });
+
+  if (matches.length === 0) return null;
+  return (
+    matches.find((link) => !link.archived_at) ?? matches[0] ?? null
+  );
+}
+
 export function isValidHttpUrl(input: string): boolean {
   try {
     normalizeUrl(input);

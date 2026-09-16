@@ -211,7 +211,8 @@ export function contentOverflowsViewport(
 
 /**
  * Temporary presentation positions for search results.
- * Rank 0 sits near visual center; others spiral outward.
+ * Rank 0 is placed so the bubble's visual center sits on the search stage
+ * point (0, stageY). Camera centers that point. Others spiral around it.
  * Does NOT mutate persisted coordinates.
  */
 export function searchClusterPositions(
@@ -219,7 +220,13 @@ export function searchClusterPositions(
   options?: { mobile?: boolean }
 ): Point[] {
   const mobile = options?.mobile ?? false;
-  const center = mobile ? { x: -40, y: 40 } : { x: 0, y: 36 };
+  const hero = BUBBLE_FOOTPRINT.medium;
+  // Sit slightly below true viewport center so the search bar doesn't cover it.
+  const stageY = mobile ? 28 : 44;
+  const center = {
+    x: -hero.width / 2,
+    y: -hero.height / 2 + stageY,
+  };
 
   return ranks.map((rank) => {
     if (rank === 0) {
@@ -231,17 +238,22 @@ export function searchClusterPositions(
       ? (rank - 1) % 3
       : (rank - 1) % 5;
     const countInRing = mobile ? 3 : 5;
-    const radius = mobile ? 130 + ring * 150 : 160 + ring * 190;
+    const radius = mobile ? 150 + ring * 160 : 200 + ring * 200;
     const angle =
       -Math.PI / 2 +
       ((indexInRing + 0.5) / countInRing) * Math.PI * 2 +
       ring * 0.18;
 
     return {
-      x: center.x + Math.cos(angle) * radius - 90,
-      y: center.y + Math.sin(angle) * radius * (mobile ? 1.05 : 0.82) - 40,
+      x: Math.cos(angle) * radius - hero.width / 2,
+      y: Math.sin(angle) * radius * (mobile ? 1.05 : 0.82) - hero.height / 2 + stageY,
     };
   });
+}
+
+/** Flow-space point the search camera should lock onto (hero visual center). */
+export function searchStageCenter(options?: { mobile?: boolean }): Point {
+  return { x: 0, y: options?.mobile ? 28 : 44 };
 }
 
 function round2(n: number) {

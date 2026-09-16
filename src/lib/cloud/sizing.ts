@@ -40,9 +40,9 @@ export function defaultBubbleScaleFactor(link: LinkWithTags): number {
 /** Search relevance → visual scale. Controlled; never enormous. */
 export function searchScaleForRank(rank: number, matched: boolean): number {
   if (!matched) return 0.82;
-  if (rank === 0) return 1.42;
-  if (rank <= 2) return 1.2;
-  if (rank <= 7) return 1.02;
+  if (rank === 0) return 1.55;
+  if (rank <= 2) return 1.18;
+  if (rank <= 7) return 1.0;
   return 0.88;
 }
 
