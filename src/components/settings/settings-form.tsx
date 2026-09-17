@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ArchivedLinksSection } from "@/components/settings/archived-links";
+import { SettingsImportButton } from "@/components/links/import-file-button";
 import { updateProfileSchema, type UpdateProfileFormValues } from "@/lib/schemas";
 import { updateProfileAction, signOutAction } from "@/lib/auth/actions";
 import { resetCanvasPositionsAction } from "@/lib/links/actions";
@@ -79,6 +80,15 @@ export function SettingsForm({
           {pending ? "Saving…" : "Save changes"}
         </Button>
       </form>
+
+      <div className="border-t border-slate-200/80 pt-6">
+        <h2 className="text-base font-semibold text-slate-800">Import</h2>
+        <p className="mt-1 text-sm text-slate-500">
+          Upload a .txt or .csv of URLs (optional label and tags). You&apos;ll
+          review them one by one on the canvas — or add all at once.
+        </p>
+        <SettingsImportButton />
+      </div>
 
       <div className="border-t border-slate-200/80 pt-6">
         <h2 className="text-base font-semibold text-slate-800">Canvas</h2>

@@ -20,6 +20,7 @@ import {
   contentOverflowsViewport,
   BUBBLE_FOOTPRINT,
 } from "@/lib/cloud/layout";
+import { parseLinksFile } from "@/lib/import/parse-links-file";
 import type { LinkWithTags } from "@/lib/types";
 
 function fakeLink(partial: Partial<LinkWithTags> & Pick<LinkWithTags, "id" | "label">): LinkWithTags {
@@ -191,5 +192,52 @@ describe("layout collision", () => {
         50
       )
     ).toBe(true);
+  });
+});
+
+describe("link file import", () => {
+  it("parses txt urls with optional labels and tags", () => {
+    const text = [
+      "https://supabase.com",
+      "https://github.com/org/repo | Work repos",
+      "docs.google.com/x  September usage",
+      "https://github.com/org/repo",
+      "javascript:alert(1)",
+    ].join("\n");
+
+    const result = parseLinksFile(text, { filename: "links.txt" });
+    expect(result.drafts.length).toBe(3);
+    expect(result.drafts[0]?.label).toBe("supabase.com");
+    expect(result.drafts[1]?.label).toBe("Work repos");
+    expect(result.duplicateCount).toBe(1);
+    expect(result.invalidCount).toBe(1);
+  });
+
+  it("parses csv with header and skips existing links", () => {
+    const text = [
+      "url,label,tags",
+      "https://example.com/a,Alpha,\"work,prod\"",
+      "https://www.example.com/a,Dup",
+      "https://example.com/b,Beta,personal",
+    ].join("\n");
+
+    const existing = [
+      fakeLink({
+        id: "1",
+        label: "Alpha",
+        url: "https://example.com/a",
+        normalized_url: "https://example.com/a",
+        hostname: "example.com",
+      }),
+    ];
+
+    const result = parseLinksFile(text, {
+      filename: "links.csv",
+      existingLinks: existing,
+    });
+    expect(result.drafts.length).toBe(1);
+    expect(result.drafts[0]?.label).toBe("Beta");
+    expect(result.drafts[0]?.tags).toContain("personal");
+    expect(result.duplicateCount).toBe(2);
   });
 });

@@ -24,6 +24,7 @@ import {
   type UrlBubbleFlowNode,
 } from "@/components/cloud/url-bubble-node";
 import { ViewportControls } from "@/components/cloud/viewport-controls";
+import { ImportFileButton } from "@/components/links/import-file-button";
 import { Button } from "@/components/ui/button";
 import {
   BUBBLE_FOOTPRINT,
@@ -178,6 +179,7 @@ function CloudCanvasInner() {
     setSearchQuery,
     openAddLink,
     openEditLink,
+    openImportQueue,
     selectedLinkId,
     setSelectedLinkId,
   } = useAppState();
@@ -613,7 +615,50 @@ function CloudCanvasInner() {
         {activeLinks.length > 0 ? <ViewportControls /> : null}
       </ReactFlow>
 
-      {activeLinks.length === 0 ? <CloudEmptyState /> : null}
+      {activeLinks.length === 0 ? (
+        <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center px-6">
+          <div className="pointer-events-auto flex flex-col items-center">
+            <CloudEmptyState />
+            <div className="mt-8 flex items-center gap-3">
+              <ImportFileButton
+                links={links}
+                onQueue={openImportQueue}
+                variant="outline"
+                className="h-12 min-w-[7.5rem] rounded-full border-0 bg-white px-6 text-[15px] font-medium text-slate-700 shadow-[0_8px_28px_rgba(70,120,180,0.14)] hover:bg-white hover:text-slate-900"
+                label="Import"
+              />
+              <Button
+                type="button"
+                size="icon-lg"
+                onClick={() => openAddLink()}
+                className="size-12 shrink-0 rounded-full bg-slate-900 text-white shadow-[0_10px_30px_rgba(15,23,42,0.22)] hover:bg-slate-800"
+                aria-label="Add link"
+              >
+                <Plus className="size-5" />
+              </Button>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="pointer-events-none absolute right-4 bottom-[max(1.25rem,env(safe-area-inset-bottom))] z-20 flex items-center gap-2 sm:right-6 sm:bottom-6">
+          <ImportFileButton
+            links={links}
+            onQueue={openImportQueue}
+            variant="outline"
+            className="pointer-events-auto h-12 rounded-full border-0 bg-white/90 px-5 text-slate-600 shadow-[0_8px_24px_rgba(70,120,180,0.12)] backdrop-blur-md hover:bg-white"
+            label="Import"
+          />
+          <Button
+            type="button"
+            size="icon-lg"
+            onClick={() => openAddLink()}
+            className="pointer-events-auto size-12 shrink-0 rounded-full bg-slate-900 text-white shadow-lg shadow-sky-900/15 hover:bg-slate-800"
+            aria-label="Add link"
+          >
+            <Plus className="size-5" />
+          </Button>
+        </div>
+      )}
 
       {searching && matchedCount === 0 ? (
         <div className="pointer-events-none absolute inset-x-0 top-[30%] z-20 flex justify-center px-6">
@@ -646,18 +691,6 @@ function CloudCanvasInner() {
         onToggleFavorite={handleToggleFavorite}
         onArchive={handleArchive}
       />
-
-      <div className="pointer-events-none absolute right-4 bottom-[max(1.25rem,env(safe-area-inset-bottom))] z-20 sm:right-6 sm:bottom-6">
-        <Button
-          type="button"
-          size="icon-lg"
-          onClick={() => openAddLink()}
-          className="pointer-events-auto size-12 rounded-2xl bg-slate-900 text-white shadow-lg shadow-sky-900/15 hover:bg-slate-800"
-          aria-label="Add link"
-        >
-          <Plus className="size-5" />
-        </Button>
-      </div>
     </div>
   );
 }

@@ -10,6 +10,7 @@ import {
   type RefObject,
 } from "react";
 import { toast } from "sonner";
+import type { ImportDraft } from "@/lib/import/parse-links-file";
 import { findLinkByUrl } from "@/lib/normalize-url";
 import type { LinkWithTags } from "@/lib/types";
 
@@ -29,6 +30,14 @@ type AppStateContextValue = {
   closeEditLink: () => void;
   /** Close dialogs, search for this link, and select it on the canvas. */
   revealLinkOnCanvas: (link: LinkWithTags) => void;
+  importQueue: ImportDraft[];
+  importIndex: number;
+  isImportOpen: boolean;
+  openImportQueue: (drafts: ImportDraft[]) => void;
+  closeImportQueue: () => void;
+  setImportIndex: (index: number) => void;
+  updateImportDraft: (id: string, patch: Partial<ImportDraft>) => void;
+  removeImportDraft: (id: string) => void;
   searchInputRef: RefObject<HTMLInputElement | null> | null;
   registerSearchInput: (ref: RefObject<HTMLInputElement | null>) => void;
   allTagNames: string[];
@@ -49,36 +58,18 @@ export function AppStateProvider({
   const [isAddLinkOpen, setIsAddLinkOpen] = useState(false);
   const [addLinkInitialUrl, setAddLinkInitialUrl] = useState("");
   const [editingLink, setEditingLink] = useState<LinkWithTags | null>(null);
+  const [importQueue, setImportQueue] = useState<ImportDraft[]>([]);
+  const [importIndex, setImportIndex] = useState(0);
+  const [isImportOpen, setIsImportOpen] = useState(false);
   const [searchInputRef, setSearchInputRef] =
     useState<RefObject<HTMLInputElement | null> | null>(null);
 
   const revealLinkOnCanvas = useCallback(
     (link: LinkWithTags) => {
-      // #region agent log
-      fetch("http://127.0.0.1:7862/ingest/e3f614d5-48ef-46ea-98fe-f235c91961c9", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Debug-Session-Id": "ddc618",
-        },
-        body: JSON.stringify({
-          sessionId: "ddc618",
-          runId: "pre-fix",
-          hypothesisId: "B",
-          location: "app-state.tsx:revealLinkOnCanvas",
-          message: "revealLinkOnCanvas called",
-          data: {
-            linkId: link.id,
-            archived: Boolean(link.archived_at),
-            labelLen: link.label.length,
-          },
-          timestamp: Date.now(),
-        }),
-      }).catch(() => {});
-      // #endregion
       setIsAddLinkOpen(false);
       setAddLinkInitialUrl("");
       setEditingLink(null);
+      setIsImportOpen(false);
       setSelectedLinkId(link.id);
       const query = link.label.trim() || link.hostname || link.url;
       setSearchQuery(query);
@@ -93,54 +84,10 @@ export function AppStateProvider({
   const openAddLink = useCallback(
     (initialUrl = "") => {
       const trimmed = initialUrl.trim();
-      // #region agent log
-      fetch("http://127.0.0.1:7862/ingest/e3f614d5-48ef-46ea-98fe-f235c91961c9", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Debug-Session-Id": "ddc618",
-        },
-        body: JSON.stringify({
-          sessionId: "ddc618",
-          runId: "pre-fix",
-          hypothesisId: "B",
-          location: "app-state.tsx:openAddLink",
-          message: "openAddLink called",
-          data: {
-            hasUrl: Boolean(trimmed),
-            urlLen: trimmed.length,
-            linkCount: links.length,
-          },
-          timestamp: Date.now(),
-        }),
-      }).catch(() => {});
-      // #endregion
       if (trimmed) {
         const existing = findLinkByUrl(links, trimmed);
         if (existing) {
-          // #region agent log
-          fetch(
-            "http://127.0.0.1:7862/ingest/e3f614d5-48ef-46ea-98fe-f235c91961c9",
-            {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                "X-Debug-Session-Id": "ddc618",
-              },
-              body: JSON.stringify({
-                sessionId: "ddc618",
-                runId: "pre-fix",
-                hypothesisId: "B",
-                location: "app-state.tsx:openAddLink:duplicate",
-                message: "duplicate detected — revealing",
-                data: { existingId: existing.id },
-                timestamp: Date.now(),
-              }),
-            }
-          ).catch(() => {});
-          // #endregion
           revealLinkOnCanvas(existing);
-          // Defer toast so it never runs inside another component's render/update.
           queueMicrotask(() => {
             toast.message(
               existing.archived_at
@@ -152,6 +99,7 @@ export function AppStateProvider({
         }
       }
       setEditingLink(null);
+      setIsImportOpen(false);
       setAddLinkInitialUrl(initialUrl);
       setIsAddLinkOpen(true);
     },
@@ -170,12 +118,48 @@ export function AppStateProvider({
       setSelectedLinkId(id);
       setEditingLink(link);
       setIsAddLinkOpen(false);
+      setIsImportOpen(false);
     },
     [links]
   );
 
   const closeEditLink = useCallback(() => {
     setEditingLink(null);
+  }, []);
+
+  const openImportQueue = useCallback((drafts: ImportDraft[]) => {
+    if (drafts.length === 0) return;
+    setIsAddLinkOpen(false);
+    setEditingLink(null);
+    setImportQueue(drafts);
+    setImportIndex(0);
+    setIsImportOpen(true);
+  }, []);
+
+  const closeImportQueue = useCallback(() => {
+    setIsImportOpen(false);
+    setImportQueue([]);
+    setImportIndex(0);
+  }, []);
+
+  const updateImportDraft = useCallback(
+    (id: string, patch: Partial<ImportDraft>) => {
+      setImportQueue((prev) =>
+        prev.map((item) => (item.id === id ? { ...item, ...patch } : item))
+      );
+    },
+    []
+  );
+
+  const removeImportDraft = useCallback((id: string) => {
+    setImportQueue((prev) => {
+      const next = prev.filter((item) => item.id !== id);
+      setImportIndex((index) => {
+        if (next.length === 0) return 0;
+        return Math.min(index, next.length - 1);
+      });
+      return next;
+    });
   }, []);
 
   const registerSearchInput = useCallback(
@@ -211,6 +195,14 @@ export function AppStateProvider({
       openEditLink,
       closeEditLink,
       revealLinkOnCanvas,
+      importQueue,
+      importIndex,
+      isImportOpen,
+      openImportQueue,
+      closeImportQueue,
+      setImportIndex,
+      updateImportDraft,
+      removeImportDraft,
       searchInputRef,
       registerSearchInput,
       allTagNames,
@@ -227,6 +219,13 @@ export function AppStateProvider({
       openEditLink,
       closeEditLink,
       revealLinkOnCanvas,
+      importQueue,
+      importIndex,
+      isImportOpen,
+      openImportQueue,
+      closeImportQueue,
+      updateImportDraft,
+      removeImportDraft,
       searchInputRef,
       registerSearchInput,
       allTagNames,

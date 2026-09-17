@@ -141,24 +141,6 @@ function revalidateApp() {
 export async function createLinkAction(
   input: CreateLinkInput
 ): Promise<ActionResult<LinkWithTags>> {
-  // #region agent log
-  fetch("http://127.0.0.1:7862/ingest/e3f614d5-48ef-46ea-98fe-f235c91961c9", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "X-Debug-Session-Id": "ddc618",
-    },
-    body: JSON.stringify({
-      sessionId: "ddc618",
-      runId: "pre-fix",
-      hypothesisId: "D",
-      location: "actions.ts:createLinkAction:entry",
-      message: "createLinkAction entry",
-      data: { hasUrl: Boolean(input?.url), labelLen: input?.label?.length ?? 0 },
-      timestamp: Date.now(),
-    }),
-  }).catch(() => {});
-  // #endregion
   const parsed = createLinkSchema.safeParse(input);
   if (!parsed.success) {
     return {
@@ -196,24 +178,6 @@ export async function createLinkAction(
   const existing = duplicateRows?.[0];
 
   if (existing) {
-    // #region agent log
-    fetch("http://127.0.0.1:7862/ingest/e3f614d5-48ef-46ea-98fe-f235c91961c9", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Debug-Session-Id": "ddc618",
-      },
-      body: JSON.stringify({
-        sessionId: "ddc618",
-        runId: "pre-fix",
-        hypothesisId: "D",
-        location: "actions.ts:createLinkAction:duplicate",
-        message: "server duplicate hit",
-        data: { existingId: existing.id },
-        timestamp: Date.now(),
-      }),
-    }).catch(() => {});
-    // #endregion
     const links = await getLinksForCurrentUser({ includeArchived: true });
     const existingLink = links.find((link) => link.id === existing.id);
 
@@ -294,6 +258,149 @@ export async function createLinkAction(
       code: "UNKNOWN",
     };
   }
+}
+
+export type BulkCreateResult = {
+  created: LinkWithTags[];
+  skippedDuplicates: number;
+  failed: number;
+};
+
+/** Create many links in one request; packs positions sequentially. */
+export async function createLinksBulkAction(
+  inputs: CreateLinkInput[]
+): Promise<ActionResult<BulkCreateResult>> {
+  if (!Array.isArray(inputs) || inputs.length === 0) {
+    return {
+      success: false,
+      error: "Nothing to import.",
+      code: "VALIDATION",
+    };
+  }
+
+  if (inputs.length > 100) {
+    return {
+      success: false,
+      error: "Import is limited to 100 links at a time.",
+      code: "VALIDATION",
+    };
+  }
+
+  const { supabase, userId } = await requireUserId();
+  if (!userId) {
+    return { success: false, error: "Please sign in to continue.", code: "UNAUTHORIZED" };
+  }
+
+  const { data: existingRows } = await supabase
+    .from("links")
+    .select("position_x, position_y, normalized_url, url, archived_at")
+    .eq("user_id", userId);
+
+  const occupied = occupiedFromLinks(
+    (existingRows ?? []).filter((row) => row.archived_at == null)
+  );
+  const known = (existingRows ?? []).map((row) => ({
+    normalized_url: row.normalized_url as string,
+    url: row.url as string,
+    archived_at: (row.archived_at as string | null) ?? null,
+  }));
+
+  const created: LinkWithTags[] = [];
+  let skippedDuplicates = 0;
+  let failed = 0;
+  let existingCount = occupied.length;
+
+  for (const input of inputs) {
+    const parsed = createLinkSchema.safeParse(input);
+    if (!parsed.success) {
+      failed += 1;
+      continue;
+    }
+
+    let normalized;
+    try {
+      normalized = normalizeUrl(parsed.data.url);
+    } catch {
+      failed += 1;
+      continue;
+    }
+
+    if (findLinkByUrl(known, parsed.data.url)) {
+      skippedDuplicates += 1;
+      continue;
+    }
+
+    const position = generateCanvasPosition({
+      existingCount,
+      occupied,
+    });
+
+    try {
+      const { data: link, error } = await supabase
+        .from("links")
+        .insert({
+          user_id: userId,
+          url: normalized.original.includes("://")
+            ? normalized.original
+            : normalized.normalized,
+          normalized_url: normalized.normalized,
+          label: parsed.data.label,
+          hostname: normalized.hostname,
+          notes: parsed.data.notes ?? null,
+          page_title: parsed.data.page_title ?? null,
+          description: parsed.data.description ?? null,
+          favicon_url: parsed.data.favicon_url ?? normalized.faviconUrl,
+          position_x: position.position_x,
+          position_y: position.position_y,
+          visual_seed: position.visual_seed,
+        })
+        .select("*")
+        .single();
+
+      if (error || !link) {
+        if (error?.code === "23505") {
+          skippedDuplicates += 1;
+          known.push({
+            normalized_url: normalized.normalized,
+            url: normalized.normalized,
+            archived_at: null,
+          });
+          continue;
+        }
+        failed += 1;
+        continue;
+      }
+
+      const tags = await ensureTags(supabase, userId, parsed.data.tags ?? []);
+      await syncLinkTags(supabase, link.id, tags);
+
+      const withTags = { ...(link as LinkWithTags), tags };
+      created.push(withTags);
+      occupied.push({
+        x: position.position_x,
+        y: position.position_y,
+        width: 196,
+        height: 88,
+      });
+      existingCount += 1;
+      known.push({
+        normalized_url: normalized.normalized,
+        url: normalized.normalized,
+        archived_at: null,
+      });
+    } catch {
+      failed += 1;
+    }
+  }
+
+  if (created.length > 0) {
+    revalidateApp();
+  }
+
+  return {
+    success: true,
+    data: { created, skippedDuplicates, failed },
+  };
 }
 
 export async function updateLinkPositionAction(

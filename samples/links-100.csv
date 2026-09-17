@@ -1,0 +1,101 @@
+url,label,tags
+https://github.com,GitHub,"dev,code"
+https://gitlab.com,GitLab,dev
+https://bitbucket.org,Bitbucket,dev
+https://stackoverflow.com,Stack Overflow,"dev,help"
+https://developer.mozilla.org,MDN Web Docs,"docs,web"
+https://react.dev,React Docs,"docs,frontend"
+https://nextjs.org/docs,Next.js Docs,"docs,frontend"
+https://tailwindcss.com/docs,Tailwind Docs,"docs,css"
+https://www.typescriptlang.org/docs,TypeScript Docs,"docs,ts"
+https://nodejs.org/docs,Node.js Docs,"docs,backend"
+https://supabase.com/dashboard,Supabase Dashboard,"db,prod"
+https://supabase.com/docs,Supabase Docs,"docs,db"
+https://vercel.com/dashboard,Vercel Dashboard,"deploy,prod"
+https://railway.app/dashboard,Railway,deploy
+https://dashboard.render.com,Render,deploy
+https://fly.io/dashboard,Fly.io,deploy
+https://app.netlify.com,Netlify,deploy
+https://console.cloud.google.com,Google Cloud Console,"cloud,prod"
+https://console.aws.amazon.com,AWS Console,"cloud,prod"
+https://portal.azure.com,Azure Portal,cloud
+https://dash.cloudflare.com,Cloudflare,"infra,prod"
+https://app.datadoghq.com,Datadog,"observability,prod"
+https://sentry.io,Sentry,"errors,prod"
+https://grafana.com,Grafana,observability
+https://console.firebase.google.com,Firebase Console,cloud
+https://app.posthog.com,PostHog,"analytics,product"
+https://analytics.google.com,Google Analytics,analytics
+https://mixpanel.com,Mixpanel,analytics
+https://amplitude.com,Amplitude,analytics
+https://www.metabase.com,Metabase BI,analytics
+https://www.notion.so,Notion,"notes,docs"
+https://docs.google.com,Google Docs,"docs,work"
+https://sheets.google.com,Google Sheets,"sheets,work"
+https://drive.google.com,Google Drive,files
+https://www.figma.com,Figma,"design,work"
+https://www.figma.com/files,Figma Files,"design,work"
+https://linear.app,Linear,"tasks,work"
+https://trello.com,Trello,tasks
+https://asana.com,Asana,tasks
+https://slack.com,Slack,comms
+https://mail.google.com,Gmail,comms
+https://calendar.google.com,Google Calendar,comms
+https://zoom.us,Zoom,comms
+https://www.linkedin.com,LinkedIn,social
+https://x.com,X / Twitter,social
+https://www.youtube.com,YouTube,media
+https://www.youtube.com/feed/library,YouTube Library,"media,learning"
+https://medium.com,Medium,reading
+https://dev.to,DEV Community,"reading,dev"
+https://news.ycombinator.com,Hacker News,reading
+https://www.producthunt.com,Product Hunt,reading
+https://dribbble.com,Dribbble,design
+https://www.behance.net,Behance,design
+https://unsplash.com,Unsplash,assets
+https://fonts.google.com,Google Fonts,assets
+https://lucide.dev,Lucide Icons,"assets,ui"
+https://heroicons.com,Heroicons,"assets,ui"
+https://ui.shadcn.com,shadcn/ui,"ui,frontend"
+https://www.radix-ui.com,Radix UI,"ui,frontend"
+https://motion.dev,Motion,frontend
+https://zustand-demo.pmnd.rs,Zustand Demo,"state,frontend"
+https://tanstack.com/query,TanStack Query,"docs,data"
+https://www.prisma.io/docs,Prisma Docs,"docs,db"
+https://orm.drizzle.team,Drizzle ORM,"docs,db"
+https://www.postgresql.org/docs,Postgres Docs,"docs,db"
+https://redis.io/docs,Redis Docs,"docs,cache"
+https://jwt.io,JWT Debugger,tools
+https://regex101.com,Regex101,tools
+https://jsonformatter.org,JSON Formatter,tools
+https://excalidraw.com,Excalidraw,"tools,design"
+https://carbon.now.sh,Carbon Screenshots,tools
+https://caniuse.com,Can I Use,"tools,web"
+https://web.dev,web.dev,"docs,web"
+https://pagespeed.web.dev,PageSpeed Insights,"perf,tools"
+https://stripe.com/docs,Stripe Docs,"docs,payments"
+https://dashboard.stripe.com,Stripe Dashboard,"payments,prod"
+https://clerk.com/docs,Clerk Docs,"docs,auth"
+https://auth0.com/docs,Auth0 Docs,"docs,auth"
+https://resend.com,Resend,"email,prod"
+https://www.mailgun.com,Mailgun,email
+https://hub.docker.com,Docker Hub,devops
+https://kubernetes.io/docs,Kubernetes Docs,"docs,devops"
+https://developer.hashicorp.com/terraform/docs,Terraform Docs,"docs,infra"
+https://status.github.com,GitHub Status,prod
+https://github.com/vercel/next.js,Next.js Repo,"code,oss"
+https://github.com/facebook/react,React Repo,"code,oss"
+https://github.com/tailwindlabs/tailwindcss,Tailwind Repo,"code,oss"
+https://www.npmjs.com,npm,"dev,packages"
+https://pypi.org,PyPI,packages
+https://crates.io,crates.io,packages
+https://pkg.go.dev,Go Packages,packages
+https://chat.openai.com,ChatGPT,ai
+https://claude.ai,Claude,ai
+https://gemini.google.com,Gemini,ai
+https://cursor.com,Cursor,ai
+https://www.wikipedia.org,Wikipedia,reference
+https://translate.google.com,Google Translate,tools
+https://maps.google.com,Google Maps,tools
+https://coolors.co,Coolors,"design,tools"
+https://www.happyhues.co,Happy Hues,"design,tools"
