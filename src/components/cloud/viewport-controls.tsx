@@ -4,8 +4,12 @@ import { LocateFixed, Minus, Plus, Maximize2 } from "lucide-react";
 import { useReactFlow } from "@xyflow/react";
 import { Button } from "@/components/ui/button";
 
-export function ViewportControls() {
-  const { zoomIn, zoomOut, fitView, setViewport } = useReactFlow();
+export function ViewportControls({
+  homeFocus = { x: 0, y: 40 },
+}: {
+  homeFocus?: { x: number; y: number };
+}) {
+  const { zoomIn, zoomOut, fitView, setCenter } = useReactFlow();
 
   return (
     <div className="pointer-events-none absolute bottom-5 left-4 z-20 sm:bottom-6 sm:left-5">
@@ -35,8 +39,10 @@ export function ViewportControls() {
           variant="ghost"
           size="icon"
           className="size-10 rounded-xl text-slate-600 hover:bg-white/80"
-          aria-label="Reset view"
-          onClick={() => setViewport({ x: 0, y: 0, zoom: 1 }, { duration: 280 })}
+          aria-label="Back to home cluster"
+          onClick={() =>
+            void setCenter(homeFocus.x, homeFocus.y, { zoom: 1, duration: 280 })
+          }
         >
           <LocateFixed className="size-4" />
         </Button>
@@ -50,8 +56,8 @@ export function ViewportControls() {
             fitView({
               padding: 0.18,
               duration: 320,
-              maxZoom: 1.15,
-              minZoom: 0.35,
+              maxZoom: 1.05,
+              minZoom: 0.3,
             })
           }
         >

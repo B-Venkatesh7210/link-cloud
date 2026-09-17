@@ -29,7 +29,8 @@ import { Button } from "@/components/ui/button";
 import {
   BUBBLE_FOOTPRINT,
   cloudTranslateExtent,
-  contentOverflowsViewport,
+  homeFocusPoint,
+  homeLinkCapacity,
   searchStageCenter,
   toOccupiedBox,
 } from "@/lib/cloud/layout";
@@ -71,17 +72,25 @@ function useViewportSize() {
   return size;
 }
 
-/** Frames all bubbles whenever the link set settles; skips search / drag. */
+/** Keeps a readable home zoom — never fit-all on boot. Pan to discover more. */
 function CameraController({
   layoutKey,
   searching,
   draggingRef,
+  focusX,
+  focusY,
+  linkCount,
+  homeCapacity,
 }: {
   layoutKey: string;
   searching: boolean;
   draggingRef: MutableRefObject<boolean>;
+  focusX: number;
+  focusY: number;
+  linkCount: number;
+  homeCapacity: number;
 }) {
-  const { fitView } = useReactFlow();
+  const { setCenter, fitView } = useReactFlow();
   const nodesInitialized = useNodesInitialized();
   const lastKeyRef = useRef<string | null>(null);
   const wasSearchingRef = useRef(searching);
@@ -99,34 +108,36 @@ function CameraController({
     lastKeyRef.current = layoutKey;
 
     const id = window.setTimeout(() => {
-      // #region agent log
-      fetch("http://127.0.0.1:7862/ingest/e3f614d5-48ef-46ea-98fe-f235c91961c9", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Debug-Session-Id": "ddc618",
-        },
-        body: JSON.stringify({
-          sessionId: "ddc618",
-          runId: "pre-fix",
-          hypothesisId: "C",
-          location: "cloud-canvas.tsx:CameraController",
-          message: "fitView scheduled",
-          data: { layoutKeyLen: layoutKey.length, searching, exitedSearch },
-          timestamp: Date.now(),
-        }),
-      }).catch(() => {});
-      // #endregion
-      void fitView({
-        padding: 0.22,
+      // Small skies can gently frame everything; large skies stay at home zoom.
+      if (linkCount > 0 && linkCount <= homeCapacity) {
+        void fitView({
+          padding: 0.28,
+          duration: 380,
+          maxZoom: 1,
+          minZoom: 0.85,
+        });
+        return;
+      }
+
+      void setCenter(focusX, focusY, {
+        zoom: 1,
         duration: 380,
-        maxZoom: 1.05,
-        minZoom: 0.45,
       });
-    }, 40);
+    }, 50);
 
     return () => window.clearTimeout(id);
-  }, [draggingRef, fitView, layoutKey, nodesInitialized, searching]);
+  }, [
+    draggingRef,
+    fitView,
+    focusX,
+    focusY,
+    homeCapacity,
+    layoutKey,
+    linkCount,
+    nodesInitialized,
+    searching,
+    setCenter,
+  ]);
 
   return null;
 }
@@ -243,9 +254,14 @@ function CloudCanvasInner() {
     ];
   }, [occupiedBoxes, searching]);
 
-  const overflowsViewport = useMemo(
-    () => contentOverflowsViewport(occupiedBoxes, viewportSize),
-    [occupiedBoxes, viewportSize]
+  const homeCapacity = useMemo(
+    () => homeLinkCapacity(viewportSize),
+    [viewportSize]
+  );
+
+  const homeFocus = useMemo(
+    () => homeFocusPoint(activeLinks, homeCapacity),
+    [activeLinks, homeCapacity]
   );
 
   const updateLinkLocal = useCallback(
@@ -259,24 +275,6 @@ function CloudCanvasInner() {
 
   const handleOpen = useCallback(
     (id: string) => {
-      // #region agent log
-      fetch("http://127.0.0.1:7862/ingest/e3f614d5-48ef-46ea-98fe-f235c91961c9", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Debug-Session-Id": "ddc618",
-        },
-        body: JSON.stringify({
-          sessionId: "ddc618",
-          runId: "pre-fix",
-          hypothesisId: "A",
-          location: "cloud-canvas.tsx:handleOpen:entry",
-          message: "handleOpen entry",
-          data: { id },
-          timestamp: Date.now(),
-        }),
-      }).catch(() => {});
-      // #endregion
       let snapshot: LinkWithTags | undefined;
 
       setLinks((prev) => {
@@ -294,25 +292,6 @@ function CloudCanvasInner() {
         );
       });
 
-      // #region agent log
-      fetch("http://127.0.0.1:7862/ingest/e3f614d5-48ef-46ea-98fe-f235c91961c9", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Debug-Session-Id": "ddc618",
-        },
-        body: JSON.stringify({
-          sessionId: "ddc618",
-          runId: "pre-fix",
-          hypothesisId: "A",
-          location: "cloud-canvas.tsx:handleOpen:afterSetState",
-          message: "handleOpen after setLinks (side effects next)",
-          data: { found: Boolean(snapshot), hasUrl: Boolean(snapshot?.url) },
-          timestamp: Date.now(),
-        }),
-      }).catch(() => {});
-      // #endregion
-
       if (!snapshot) return;
 
       const previousCount = snapshot.open_count;
@@ -320,30 +299,6 @@ function CloudCanvasInner() {
       window.open(snapshot.url, "_blank", "noopener,noreferrer");
 
       void recordLinkOpenAction(id).then((result) => {
-        // #region agent log
-        fetch(
-          "http://127.0.0.1:7862/ingest/e3f614d5-48ef-46ea-98fe-f235c91961c9",
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "X-Debug-Session-Id": "ddc618",
-            },
-            body: JSON.stringify({
-              sessionId: "ddc618",
-              runId: "pre-fix",
-              hypothesisId: "A",
-              location: "cloud-canvas.tsx:handleOpen:actionResult",
-              message: "recordLinkOpenAction resolved",
-              data: {
-                success: result.success,
-                error: result.success ? null : result.error,
-              },
-              timestamp: Date.now(),
-            }),
-          }
-        ).catch(() => {});
-        // #endregion
         if (!result.success) {
           setLinks((latest) =>
             latest.map((item) =>
@@ -587,15 +542,15 @@ function CloudCanvasInner() {
         nodesConnectable={false}
         elementsSelectable
         panOnScroll
-        zoomOnScroll
+        panOnScrollSpeed={0.85}
+        zoomOnScroll={false}
+        zoomActivationKeyCode={["Meta", "Control"]}
         zoomOnPinch
         panOnDrag
         selectionOnDrag={false}
-        minZoom={overflowsViewport ? 0.35 : 0.7}
+        minZoom={0.35}
         maxZoom={2.2}
         translateExtent={translateExtent}
-        fitView
-        fitViewOptions={{ padding: 0.22, maxZoom: 1.05, minZoom: 0.45 }}
         proOptions={{ hideAttribution: true }}
         defaultViewport={{ x: 0, y: 0, zoom: 1 }}
         className="linkcloud-flow bg-transparent!"
@@ -605,6 +560,10 @@ function CloudCanvasInner() {
           layoutKey={layoutKey}
           searching={searching}
           draggingRef={draggingRef}
+          focusX={homeFocus.x}
+          focusY={homeFocus.y}
+          linkCount={activeLinks.length}
+          homeCapacity={homeCapacity}
         />
         <SearchFocusCamera
           searching={searching}
@@ -612,8 +571,10 @@ function CloudCanvasInner() {
           hasMatch={matchedCount > 0}
           mobile={isMobile}
         />
-        {activeLinks.length > 0 ? <ViewportControls /> : null}
+        {activeLinks.length > 0 ? <ViewportControls homeFocus={homeFocus} /> : null}
       </ReactFlow>
+
+      <div className="linkcloud-edge-veil" aria-hidden />
 
       {activeLinks.length === 0 ? (
         <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center px-6">

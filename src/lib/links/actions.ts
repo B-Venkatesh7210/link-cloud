@@ -22,6 +22,7 @@ import {
   normalizeTagName,
   occupiedFromLinks,
 } from "@/lib/helpers";
+import { packRankedPositions } from "@/lib/cloud/layout";
 import { APP_ROUTES } from "@/config/app";
 import { getLinksForCurrentUser } from "@/lib/links/queries";
 
@@ -394,6 +395,45 @@ export async function createLinksBulkAction(
   }
 
   if (created.length > 0) {
+    const allActive = await getLinksForCurrentUser({ includeArchived: false });
+    const packed = packRankedPositions(
+      allActive.map((link) => ({
+        id: link.id,
+        visual_seed: link.visual_seed,
+        open_count: link.open_count,
+        last_opened_at: link.last_opened_at,
+        is_favorite: link.is_favorite,
+        created_at: link.created_at,
+      }))
+    );
+
+    const positionById = new Map(
+      packed.map((row) => [row.id, row] as const)
+    );
+
+    for (const row of packed) {
+      await supabase
+        .from("links")
+        .update({
+          position_x: row.position_x,
+          position_y: row.position_y,
+        })
+        .eq("id", row.id)
+        .eq("user_id", userId);
+    }
+
+    for (let i = 0; i < created.length; i += 1) {
+      const link = created[i]!;
+      const pos = positionById.get(link.id);
+      if (pos) {
+        created[i] = {
+          ...link,
+          position_x: pos.position_x,
+          position_y: pos.position_y,
+        };
+      }
+    }
+
     revalidateApp();
   }
 
@@ -759,10 +799,9 @@ export async function resetCanvasPositionsAction(): Promise<
 
   const { data: rows, error } = await supabase
     .from("links")
-    .select("id, visual_seed")
+    .select("id, visual_seed, open_count, last_opened_at, is_favorite, created_at")
     .eq("user_id", userId)
-    .is("archived_at", null)
-    .order("created_at", { ascending: true });
+    .is("archived_at", null);
 
   if (error || !rows) {
     return {
@@ -772,29 +811,25 @@ export async function resetCanvasPositionsAction(): Promise<
     };
   }
 
-  const occupied: ReturnType<typeof occupiedFromLinks> = [];
+  const packed = packRankedPositions(
+    rows.map((row) => ({
+      id: row.id as string,
+      visual_seed: row.visual_seed as number,
+      open_count: (row.open_count as number) ?? 0,
+      last_opened_at: (row.last_opened_at as string | null) ?? null,
+      is_favorite: Boolean(row.is_favorite),
+      created_at: row.created_at as string,
+    }))
+  );
 
-  for (let index = 0; index < rows.length; index += 1) {
-    const row = rows[index]!;
-    const position = generateCanvasPosition({
-      seed: row.visual_seed,
-      existingCount: index,
-      occupied,
-    });
-    occupied.push({
-      x: position.position_x,
-      y: position.position_y,
-      width: 196,
-      height: 88,
-    });
-
+  for (const position of packed) {
     const { error: updateError } = await supabase
       .from("links")
       .update({
         position_x: position.position_x,
         position_y: position.position_y,
       })
-      .eq("id", row.id)
+      .eq("id", position.id)
       .eq("user_id", userId);
 
     if (updateError) {
@@ -807,5 +842,5 @@ export async function resetCanvasPositionsAction(): Promise<
   }
 
   revalidateApp();
-  return { success: true, data: { count: rows.length } };
+  return { success: true, data: { count: packed.length } };
 }

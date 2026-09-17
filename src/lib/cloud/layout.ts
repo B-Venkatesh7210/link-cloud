@@ -209,6 +209,96 @@ export function contentOverflowsViewport(
   return w > viewport.width * 0.95 || h > viewport.height * 0.92;
 }
 
+/** How many bubbles comfortably fill one screen at zoom ~1. */
+export function homeLinkCapacity(viewport: {
+  width: number;
+  height: number;
+}): number {
+  const usableW = Math.max(320, viewport.width - 96);
+  const usableH = Math.max(280, viewport.height - 180);
+  const cellW = BUBBLE_FOOTPRINT.medium.width + DEFAULT_SPACING;
+  const cellH = BUBBLE_FOOTPRINT.medium.height + DEFAULT_SPACING;
+  const estimated = Math.floor(((usableW * usableH) / (cellW * cellH)) * 0.5);
+  return Math.max(8, Math.min(24, estimated));
+}
+
+export type CloudRankable = {
+  id: string;
+  open_count: number;
+  last_opened_at: string | null;
+  is_favorite: boolean;
+  created_at: string;
+  visual_seed: number;
+};
+
+/**
+ * Most opened / recent first; if nobody has opens yet, sheet/list order
+ * (created_at ascending) wins so import tops sit at the center.
+ */
+export function compareCloudPriority(a: CloudRankable, b: CloudRankable): number {
+  if (a.open_count !== b.open_count) return b.open_count - a.open_count;
+  const aOpen = a.last_opened_at ? Date.parse(a.last_opened_at) : 0;
+  const bOpen = b.last_opened_at ? Date.parse(b.last_opened_at) : 0;
+  if (aOpen !== bOpen) return bOpen - aOpen;
+  if (a.is_favorite !== b.is_favorite) return a.is_favorite ? -1 : 1;
+  return Date.parse(a.created_at) - Date.parse(b.created_at);
+}
+
+export function sortLinksForCloud<T extends CloudRankable>(links: T[]): T[] {
+  return [...links].sort(compareCloudPriority);
+}
+
+/** Camera target: centroid of the top-priority bubbles (home cluster). */
+export function homeFocusPoint(
+  links: Array<
+    CloudRankable & { position_x: number; position_y: number }
+  >,
+  capacity: number
+): Point {
+  if (links.length === 0) return { x: 0, y: 40 };
+
+  const ranked = sortLinksForCloud(links).slice(
+    0,
+    Math.min(capacity, links.length)
+  );
+  const hw = BUBBLE_FOOTPRINT.medium.width / 2;
+  const hh = BUBBLE_FOOTPRINT.medium.height / 2;
+  const cx =
+    ranked.reduce((sum, link) => sum + link.position_x + hw, 0) / ranked.length;
+  const cy =
+    ranked.reduce((sum, link) => sum + link.position_y + hh, 0) / ranked.length;
+
+  return { x: round2(cx), y: round2(cy) };
+}
+
+/** Assign collision-free positions in priority order (center = most important). */
+export function packRankedPositions(
+  links: CloudRankable[]
+): Array<{
+  id: string;
+  position_x: number;
+  position_y: number;
+  visual_seed: number;
+}> {
+  const ranked = sortLinksForCloud(links);
+  const occupied: SizedBox[] = [];
+
+  return ranked.map((link, index) => {
+    const point = placeNewLink({
+      visualSeed: link.visual_seed,
+      existingCount: index,
+      occupied,
+    });
+    occupied.push(toOccupiedBox(point));
+    return {
+      id: link.id,
+      position_x: point.x,
+      position_y: point.y,
+      visual_seed: link.visual_seed,
+    };
+  });
+}
+
 /**
  * Temporary presentation positions for search results.
  * Rank 0 is placed so the bubble's visual center sits on the search stage

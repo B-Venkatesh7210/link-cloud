@@ -18,6 +18,10 @@ import {
   toOccupiedBox,
   cloudTranslateExtent,
   contentOverflowsViewport,
+  homeLinkCapacity,
+  homeFocusPoint,
+  sortLinksForCloud,
+  packRankedPositions,
   BUBBLE_FOOTPRINT,
 } from "@/lib/cloud/layout";
 import { parseLinksFile } from "@/lib/import/parse-links-file";
@@ -192,6 +196,66 @@ describe("layout collision", () => {
         50
       )
     ).toBe(true);
+  });
+
+  it("ranks opened links ahead of import order", () => {
+    const a = fakeLink({
+      id: "a",
+      label: "A",
+      open_count: 0,
+      created_at: "2024-01-01T00:00:00.000Z",
+    });
+    const b = fakeLink({
+      id: "b",
+      label: "B",
+      open_count: 5,
+      created_at: "2024-06-01T00:00:00.000Z",
+    });
+    const c = fakeLink({
+      id: "c",
+      label: "C",
+      open_count: 0,
+      created_at: "2024-02-01T00:00:00.000Z",
+    });
+    expect(sortLinksForCloud([a, b, c]).map((l) => l.id)).toEqual([
+      "b",
+      "a",
+      "c",
+    ]);
+  });
+
+  it("packs priority links nearer the origin", () => {
+    const links = Array.from({ length: 12 }, (_, i) =>
+      fakeLink({
+        id: `id-${i}`,
+        label: `L${i}`,
+        open_count: i === 0 ? 10 : 0,
+        visual_seed: 100 + i,
+        created_at: `2024-01-${String(i + 1).padStart(2, "0")}T00:00:00.000Z`,
+      })
+    );
+    const packed = packRankedPositions(links);
+    const top = packed.find((p) => p.id === "id-0")!;
+    const far = packed.find((p) => p.id === "id-11")!;
+    const topDist = Math.hypot(top.position_x, top.position_y);
+    const farDist = Math.hypot(far.position_x, far.position_y);
+    expect(topDist).toBeLessThan(farDist);
+  });
+
+  it("estimates a bounded home capacity from viewport size", () => {
+    const desktop = homeLinkCapacity({ width: 1440, height: 900 });
+    const mobile = homeLinkCapacity({ width: 390, height: 844 });
+    expect(desktop).toBeGreaterThanOrEqual(8);
+    expect(desktop).toBeLessThanOrEqual(24);
+    expect(mobile).toBeLessThanOrEqual(desktop);
+    const focus = homeFocusPoint(
+      [
+        fakeLink({ id: "1", label: "A", position_x: 0, position_y: 0 }),
+        fakeLink({ id: "2", label: "B", position_x: 200, position_y: 100 }),
+      ],
+      8
+    );
+    expect(Number.isFinite(focus.x)).toBe(true);
   });
 });
 
