@@ -57,3 +57,14 @@ export function searchOpacityForRank(
   if (rank <= 7) return 0.78 + Math.min(0.12, score * 0.1);
   return 0.35 + Math.min(0.25, score * 0.2);
 }
+
+const TILT_MAX_DEG = 10;
+
+/**
+ * Deterministic per-link tilt in [-10°, 10°] from visual_seed.
+ * Stable across renders — not re-rolled on every paint.
+ */
+export function bubbleTiltDegrees(visualSeed: number): number {
+  const unit = ((Math.abs(visualSeed) * 2654435761) >>> 0) / 4294967295;
+  return Math.round((-TILT_MAX_DEG + unit * (TILT_MAX_DEG * 2)) * 10) / 10;
+}

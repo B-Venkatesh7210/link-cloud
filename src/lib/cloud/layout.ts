@@ -12,11 +12,12 @@ export type ContentBounds = {
   maxY: number;
 };
 
-/** Approximate bubble footprint used for packing / collision. */
+/** Approximate bubble footprint used for packing / collision.
+ * Sized for horizontal cards with tags under the label and ±10° tilt. */
 export const BUBBLE_FOOTPRINT = {
-  small: { width: 168, height: 78 },
-  medium: { width: 196, height: 88 },
-  large: { width: 228, height: 98 },
+  small: { width: 250, height: 130 },
+  medium: { width: 290, height: 140 },
+  large: { width: 330, height: 150 },
 } as const;
 
 /** Tighter gap so ~12–20 links stay in one screen. */

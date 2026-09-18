@@ -22,7 +22,7 @@ import {
   normalizeTagName,
   occupiedFromLinks,
 } from "@/lib/helpers";
-import { packRankedPositions } from "@/lib/cloud/layout";
+import { BUBBLE_FOOTPRINT, packRankedPositions } from "@/lib/cloud/layout";
 import { APP_ROUTES } from "@/config/app";
 import { getLinksForCurrentUser } from "@/lib/links/queries";
 
@@ -380,8 +380,8 @@ export async function createLinksBulkAction(
       occupied.push({
         x: position.position_x,
         y: position.position_y,
-        width: 196,
-        height: 88,
+        width: BUBBLE_FOOTPRINT.medium.width,
+        height: BUBBLE_FOOTPRINT.medium.height,
       });
       existingCount += 1;
       known.push({

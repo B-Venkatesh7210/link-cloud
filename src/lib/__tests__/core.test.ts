@@ -25,6 +25,7 @@ import {
   BUBBLE_FOOTPRINT,
 } from "@/lib/cloud/layout";
 import { parseLinksFile } from "@/lib/import/parse-links-file";
+import { bubbleTiltDegrees } from "@/lib/cloud/sizing";
 import type { LinkWithTags } from "@/lib/types";
 
 function fakeLink(partial: Partial<LinkWithTags> & Pick<LinkWithTags, "id" | "label">): LinkWithTags {
@@ -167,10 +168,15 @@ describe("layout collision", () => {
     }
 
     const maxDist = Math.max(
-      ...points.map((p) => Math.hypot(p.x + 98, p.y + 44))
+      ...points.map((p) =>
+        Math.hypot(
+          p.x + BUBBLE_FOOTPRINT.medium.width / 2,
+          p.y + BUBBLE_FOOTPRINT.medium.height / 2
+        )
+      )
     );
     // First ring + footprint should stay well inside a typical desktop frame.
-    expect(maxDist).toBeLessThan(420);
+    expect(maxDist).toBeLessThan(520);
   });
 
   it("builds a finite translate extent from content", () => {
@@ -256,6 +262,23 @@ describe("layout collision", () => {
       8
     );
     expect(Number.isFinite(focus.x)).toBe(true);
+  });
+});
+
+describe("bubble tilt", () => {
+  it("stays within ±10° and is stable for a seed", () => {
+    const a = bubbleTiltDegrees(42);
+    const b = bubbleTiltDegrees(42);
+    expect(a).toBe(b);
+    expect(a).toBeGreaterThanOrEqual(-10);
+    expect(a).toBeLessThanOrEqual(10);
+
+    const samples = [0, 1, 7, 99, 12345, 999999].map(bubbleTiltDegrees);
+    for (const deg of samples) {
+      expect(deg).toBeGreaterThanOrEqual(-10);
+      expect(deg).toBeLessThanOrEqual(10);
+    }
+    expect(new Set(samples).size).toBeGreaterThan(1);
   });
 });
 

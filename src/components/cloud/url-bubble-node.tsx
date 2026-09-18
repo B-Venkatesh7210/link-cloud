@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { domainAvatarStyle } from "@/lib/cloud/domain-avatar";
+import { bubbleTiltDegrees } from "@/lib/cloud/sizing";
 import type { UrlBubbleNodeData } from "@/lib/cloud/types";
 import {
   DropdownMenu,
@@ -40,7 +41,7 @@ function Favicon({
     return (
       <span
         className={cn(
-          "flex size-8 shrink-0 items-center justify-center rounded-xl text-xs font-semibold",
+          "flex size-7 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold",
           avatar.bg,
           avatar.text
         )}
@@ -56,9 +57,9 @@ function Favicon({
     <img
       src={src}
       alt=""
-      width={32}
-      height={32}
-      className="size-8 shrink-0 rounded-xl bg-white/80 object-contain p-1 shadow-sm ring-1 ring-slate-200/60"
+      width={28}
+      height={28}
+      className="size-7 shrink-0 rounded-full bg-white/80 object-contain p-1 shadow-sm ring-1 ring-slate-200/60"
       onError={() => setFailed(true)}
       draggable={false}
     />
@@ -94,6 +95,9 @@ function UrlBubbleNodeComponent({ data, selected }: NodeProps<UrlBubbleFlowNode>
 
   const active = isSelected || selected;
   const tags = link.tags.slice(0, scale >= 1.15 ? 3 : 2);
+  const baseTilt = bubbleTiltDegrees(link.visual_seed);
+  // Straighten while searching or selected so the card stays readable / usable.
+  const tilt = searching || active ? 0 : baseTilt;
 
   useEffect(() => {
     return () => {
@@ -123,6 +127,7 @@ function UrlBubbleNodeComponent({ data, selected }: NodeProps<UrlBubbleFlowNode>
       animate={{
         scale,
         opacity,
+        rotate: tilt,
       }}
       transition={
         reduceMotion
@@ -170,15 +175,15 @@ function UrlBubbleNodeComponent({ data, selected }: NodeProps<UrlBubbleFlowNode>
           }
         }}
         className={cn(
-          "relative w-[196px] cursor-pointer rounded-[1.6rem] border bg-white/78 px-3.5 py-3 text-left shadow-[0_10px_30px_rgba(70,120,180,0.10)] outline-none backdrop-blur-[2px] transition-[box-shadow,border-color,background-color] duration-200",
+          "relative flex w-[280px] max-w-[320px] cursor-pointer items-start gap-2.5 rounded-[1.6rem] border bg-white/78 px-3.5 py-2.5 text-left shadow-[0_10px_30px_rgba(70,120,180,0.10)] outline-none backdrop-blur-[2px] transition-[box-shadow,border-color,background-color] duration-200",
           "hover:-translate-y-0.5 hover:bg-white/90 hover:shadow-[0_16px_40px_rgba(70,120,180,0.16)]",
           "focus-visible:ring-2 focus-visible:ring-sky-300/80",
           active
             ? "border-sky-300/90 ring-2 ring-sky-200/70"
             : "border-white/80",
           recentEmphasis && !searching && "ring-1 ring-sky-200/50",
-          scale >= 1.25 && "w-[228px] rounded-[1.85rem] px-4 py-3.5",
-          scale < 0.95 && "w-[168px] rounded-[1.4rem] px-3 py-2.5"
+          scale >= 1.25 && "w-[320px] rounded-[1.85rem] px-4 py-3",
+          scale < 0.95 && "w-[240px] rounded-[1.4rem] px-3 py-2"
         )}
       >
         {link.is_favorite ? (
@@ -190,34 +195,31 @@ function UrlBubbleNodeComponent({ data, selected }: NodeProps<UrlBubbleFlowNode>
           </span>
         ) : null}
 
-        <div className="flex items-start gap-2.5">
-          <Favicon
-            src={link.favicon_url}
-            hostname={link.hostname}
-            visualSeed={link.visual_seed}
-          />
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-[14px] font-semibold tracking-tight text-slate-800">
-              {link.label}
-            </p>
-            <p className="mt-0.5 truncate text-[11px] text-slate-500">
-              {link.hostname.replace(/^www\./, "")}
-            </p>
-          </div>
+        <Favicon
+          src={link.favicon_url}
+          hostname={link.hostname}
+          visualSeed={link.visual_seed}
+        />
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-[14px] font-semibold tracking-tight text-slate-800">
+            {link.label}
+          </p>
+          <p className="mt-0.5 truncate text-[11px] text-slate-500">
+            {link.hostname.replace(/^www\./, "")}
+          </p>
+          {tags.length > 0 ? (
+            <div className="mt-2 flex flex-wrap gap-1">
+              {tags.map((tag) => (
+                <span
+                  key={tag.id}
+                  className="max-w-[7.5rem] truncate rounded-md bg-sky-50/90 px-1.5 py-0.5 text-[10px] font-medium text-sky-800/90"
+                >
+                  {tag.name}
+                </span>
+              ))}
+            </div>
+          ) : null}
         </div>
-
-        {tags.length > 0 ? (
-          <div className="mt-2.5 flex flex-wrap gap-1">
-            {tags.map((tag) => (
-              <span
-                key={tag.id}
-                className="max-w-[7.5rem] truncate rounded-md bg-sky-50/90 px-1.5 py-0.5 text-[10px] font-medium text-sky-800/90"
-              >
-                {tag.name}
-              </span>
-            ))}
-          </div>
-        ) : null}
 
         {!isMobile && tooltipVisible && !menuOpen ? (
           <div
