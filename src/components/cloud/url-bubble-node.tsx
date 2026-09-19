@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useCallback, useEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import { Handle, Position, type NodeProps, type Node } from "@xyflow/react";
 import { motion, useReducedMotion } from "motion/react";
 import {
@@ -42,7 +42,7 @@ function Favicon({
     return (
       <span
         className={cn(
-          "flex size-7 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold",
+          "flex size-9 shrink-0 items-center justify-center rounded-2xl text-xs font-semibold shadow-sm ring-1 ring-white/70",
           avatar.bg,
           avatar.text
         )}
@@ -58,9 +58,9 @@ function Favicon({
     <img
       src={src}
       alt=""
-      width={28}
-      height={28}
-      className="size-7 shrink-0 rounded-full bg-white/80 object-contain p-1 shadow-sm ring-1 ring-slate-200/60"
+      width={36}
+      height={36}
+      className="size-9 shrink-0 rounded-2xl bg-white/90 object-contain p-1.5 shadow-sm ring-1 ring-white/80"
       onError={() => setFailed(true)}
       draggable={false}
     />
@@ -177,23 +177,24 @@ function UrlBubbleNodeComponent({ data, selected }: NodeProps<UrlBubbleFlowNode>
           }
         }}
         className={cn(
-          "relative flex w-[280px] max-w-[320px] cursor-pointer items-start gap-2.5 rounded-[1.6rem] border px-3.5 py-2.5 text-left outline-none backdrop-blur-[2px] transition-[box-shadow,border-color,background-color,transform] duration-200",
+          "bubble-glass relative flex w-[280px] max-w-[320px] cursor-pointer items-start gap-3 rounded-[1.75rem] border border-transparent px-3.5 py-3 text-left outline-none backdrop-blur-xl transition-[transform,box-shadow,border-color,background-color] duration-300 ease-out",
           "hover:-translate-y-0.5",
-          "focus-visible:ring-2 focus-visible:ring-sky-300/80",
-          active ? "ring-2 ring-sky-200/70" : null,
-          recentEmphasis && !searching && "ring-1 ring-sky-200/50",
-          scale >= 1.25 && "w-[320px] rounded-[1.85rem] px-4 py-3",
-          scale < 0.95 && "w-[240px] rounded-[1.4rem] px-3 py-2"
+          "focus-visible:ring-2 focus-visible:ring-sky-300/70",
+          active && "bubble-glass-active",
+          recentEmphasis && !searching && "ring-1 ring-sky-200/40",
+          scale >= 1.25 && "w-[320px] rounded-[2rem] px-4 py-3.5",
+          scale < 0.95 && "w-[240px] rounded-[1.5rem] px-3 py-2.5"
         )}
-        style={{
-          backgroundColor: surface.background,
-          borderColor: active ? "rgba(125, 211, 252, 0.9)" : surface.border,
-          boxShadow: surface.shadow,
-        }}
+        style={
+          {
+            backgroundColor: surface.background,
+            ["--bubble-accent-border"]: surface.border,
+          } as CSSProperties
+        }
       >
         {link.is_favorite ? (
           <span
-            className="absolute -top-1.5 -right-1.5 flex size-6 items-center justify-center rounded-full bg-amber-50 text-amber-500 shadow-sm ring-1 ring-amber-200/80"
+            className="absolute -top-1.5 -right-1.5 flex size-6 items-center justify-center rounded-full bg-amber-50/95 text-amber-500 shadow-sm ring-1 ring-amber-200/80 backdrop-blur-sm"
             aria-label="Favorite"
           >
             <Star className="size-3 fill-current" />
@@ -209,15 +210,15 @@ function UrlBubbleNodeComponent({ data, selected }: NodeProps<UrlBubbleFlowNode>
           <p className="truncate text-[14px] font-semibold tracking-tight text-slate-800">
             {link.label}
           </p>
-          <p className="mt-0.5 truncate text-[11px] text-slate-500">
+          <p className="mt-0.5 truncate text-[11px] text-slate-500/90">
             {link.hostname.replace(/^www\./, "")}
           </p>
           {tags.length > 0 ? (
-            <div className="mt-2 flex flex-wrap gap-1">
+            <div className="mt-2 flex flex-wrap gap-1.5">
               {tags.map((tag) => (
                 <span
                   key={tag.id}
-                  className="max-w-[7.5rem] truncate rounded-md bg-sky-50/90 px-1.5 py-0.5 text-[10px] font-medium text-sky-800/90"
+                  className="max-w-[7.5rem] truncate rounded-full bg-white/55 px-2 py-0.5 text-[10px] font-medium text-sky-800/85 ring-1 ring-white/70 backdrop-blur-sm"
                 >
                   {tag.name}
                 </span>

@@ -154,19 +154,19 @@ export function bubbleSurfaceFromAccent(
 
   if (!rgb) {
     return {
-      background: "rgba(255, 255, 255, 0.78)",
-      border: "rgba(255, 255, 255, 0.8)",
-      shadow: "0 10px 30px rgba(70, 120, 180, 0.10)",
+      background: "rgba(255, 255, 255, 0.55)",
+      border: "rgba(148, 163, 184, 0.55)",
+      shadow: "0 8px 28px rgba(70, 120, 180, 0.10)",
     };
   }
 
-  const fill = mixWithWhite(rgb, 0.88);
-  const border = darken(rgb, 0.28);
-  const glow = mixWithWhite(rgb, 0.35);
+  const fill = mixWithWhite(rgb, 0.9);
+  const border = darken(rgb, 0.22);
+  const glow = mixWithWhite(rgb, 0.4);
 
   return {
-    background: `rgba(${Math.round(fill.r)}, ${Math.round(fill.g)}, ${Math.round(fill.b)}, 0.9)`,
-    border: `rgba(${Math.round(border.r)}, ${Math.round(border.g)}, ${Math.round(border.b)}, 0.55)`,
-    shadow: `0 10px 30px rgba(${Math.round(glow.r)}, ${Math.round(glow.g)}, ${Math.round(glow.b)}, 0.22)`,
+    background: `rgba(${Math.round(fill.r)}, ${Math.round(fill.g)}, ${Math.round(fill.b)}, 0.52)`,
+    border: `rgba(${Math.round(border.r)}, ${Math.round(border.g)}, ${Math.round(border.b)}, 0.7)`,
+    shadow: `0 10px 32px rgba(${Math.round(glow.r)}, ${Math.round(glow.g)}, ${Math.round(glow.b)}, 0.18)`,
   };
 }
