@@ -26,6 +26,26 @@ export const DEFAULT_SPACING = 52;
 /** Extra margin around content for pan clamp / fit padding feel. */
 export const CLOUD_EDGE_PADDING = 140;
 
+/**
+ * Preferred on-screen stage at zoom ~1 (camera near origin).
+ * New links fill empty gaps here before spilling outward.
+ * minY stays below the top search chrome.
+ */
+export const HOME_STAGE = {
+  minX: -620,
+  maxX: 620,
+  minY: -250,
+  maxY: 360,
+} as const;
+
+/** Soft keepout under the top search bar when home camera is near origin. */
+const TOP_CHROME_KEEPOUT: SizedBox = {
+  x: -720,
+  y: -440,
+  width: 1440,
+  height: 120,
+};
+
 function mulberry32(seed: number) {
   let t = seed >>> 0;
   return () => {
@@ -45,9 +65,48 @@ function boxesOverlap(a: SizedBox, b: SizedBox, padding: number): boolean {
   );
 }
 
+function expandStage(
+  stage: { minX: number; maxX: number; minY: number; maxY: number },
+  factor: number
+) {
+  const cx = (stage.minX + stage.maxX) / 2;
+  const cy = (stage.minY + stage.maxY) / 2;
+  const hw = ((stage.maxX - stage.minX) / 2) * factor;
+  const hh = ((stage.maxY - stage.minY) / 2) * factor;
+  return {
+    minX: cx - hw,
+    maxX: cx + hw,
+    minY: cy - hh,
+    maxY: cy + hh,
+  };
+}
+
+function minCenterDistance(box: SizedBox, occupied: SizedBox[]): number {
+  if (occupied.length === 0) return 480;
+  const cx = box.x + box.width / 2;
+  const cy = box.y + box.height / 2;
+  let min = Infinity;
+  for (const other of occupied) {
+    const ox = other.x + other.width / 2;
+    const oy = other.y + other.height / 2;
+    min = Math.min(min, Math.hypot(cx - ox, cy - oy));
+  }
+  return min;
+}
+
+function isPlacementFree(
+  box: SizedBox,
+  occupied: SizedBox[],
+  spacing: number
+): boolean {
+  if (boxesOverlap(box, TOP_CHROME_KEEPOUT, Math.max(8, spacing * 0.25))) {
+    return false;
+  }
+  return !occupied.some((other) => boxesOverlap(box, other, spacing));
+}
+
 /**
- * Compact rings first — small clouds stay near the origin so one
- * desktop viewport can frame them. Grows only as count rises.
+ * Compact rings — fallback when the home stage is full.
  */
 function ringRadius(index: number): number {
   if (index < 8) return 120;
@@ -90,7 +149,7 @@ export function resolveCollision(
 
   const tryPoint = (x: number, y: number) => {
     const box: SizedBox = { x, y, width, height };
-    return !occupied.some((other) => boxesOverlap(box, other, spacing));
+    return isPlacementFree(box, occupied, spacing);
   };
 
   if (tryPoint(best.x, best.y)) {
@@ -113,21 +172,102 @@ export function resolveCollision(
   return { x: round2(best.x), y: round2(best.y) };
 }
 
+/**
+ * Priority 1: fill the emptiest free slot on the home stage, then expand outward.
+ * Priority 2: `centerBias` pulls important links toward the origin.
+ */
+export function placeInEmptySpace(options: {
+  occupied: SizedBox[];
+  size?: { width: number; height: number };
+  spacing?: number;
+  /** 0 = empty-fill first; 1 = strongly prefer center (top-ranked links). */
+  centerBias?: number;
+  visualSeed?: number;
+}): Point {
+  const size = options.size ?? BUBBLE_FOOTPRINT.medium;
+  const spacing = options.spacing ?? DEFAULT_SPACING;
+  const centerBias = Math.min(1, Math.max(0, options.centerBias ?? 0.2));
+  const rand = mulberry32(options.visualSeed ?? 1);
+
+  if (options.occupied.length === 0) {
+    return resolveCollision(
+      candidateFromSeed(options.visualSeed ?? 1, 0),
+      size,
+      [],
+      spacing
+    );
+  }
+
+  const stepX = size.width * 0.52;
+  const stepY = size.height * 0.52;
+
+  for (let expand = 1; expand <= 5; expand += 1) {
+    const stage = expandStage(HOME_STAGE, expand);
+    let best: Point | null = null;
+    let bestScore = -Infinity;
+
+    for (let y = stage.minY; y <= stage.maxY - size.height; y += stepY) {
+      for (let x = stage.minX; x <= stage.maxX - size.width; x += stepX) {
+        const jx = x + (rand() - 0.5) * stepX * 0.4;
+        const jy = y + (rand() - 0.5) * stepY * 0.4;
+        const box: SizedBox = {
+          x: jx,
+          y: jy,
+          width: size.width,
+          height: size.height,
+        };
+        if (!isPlacementFree(box, options.occupied, spacing)) continue;
+
+        const cx = jx + size.width / 2;
+        const cy = jy + size.height / 2;
+        const separation = minCenterDistance(box, options.occupied);
+        const radial = Math.hypot(cx, cy);
+        const onHome = expand === 1 ? 1 : 0;
+
+        // Empty gaps first (especially on-screen), then importance→center.
+        const score =
+          onHome * 8000 +
+          separation * 14 +
+          -radial * (1.5 + centerBias * 18) +
+          rand() * 4;
+
+        if (score > bestScore) {
+          bestScore = score;
+          best = { x: jx, y: jy };
+        }
+      }
+    }
+
+    if (best) {
+      return { x: round2(best.x), y: round2(best.y) };
+    }
+  }
+
+  return resolveCollision(
+    candidateFromSeed(options.visualSeed ?? 1, options.occupied.length),
+    size,
+    options.occupied,
+    spacing
+  );
+}
+
 export function placeNewLink(options: {
   visualSeed: number;
   existingCount: number;
   occupied: SizedBox[];
   size?: { width: number; height: number };
   spacing?: number;
+  /** When set, biases toward center (used by ranked packing). */
+  centerBias?: number;
 }): Point {
   const size = options.size ?? BUBBLE_FOOTPRINT.medium;
-  const candidate = candidateFromSeed(options.visualSeed, options.existingCount);
-  return resolveCollision(
-    candidate,
+  return placeInEmptySpace({
+    occupied: options.occupied,
     size,
-    options.occupied,
-    options.spacing ?? DEFAULT_SPACING
-  );
+    spacing: options.spacing ?? DEFAULT_SPACING,
+    visualSeed: options.visualSeed ^ (options.existingCount * 7919),
+    centerBias: options.centerBias ?? 0.18,
+  });
 }
 
 export function toOccupiedBox(
@@ -285,10 +425,13 @@ export function packRankedPositions(
   const occupied: SizedBox[] = [];
 
   return ranked.map((link, index) => {
+    // Top ranks hug the center; later ranks prioritize remaining empty gaps.
+    const centerBias = Math.max(0, 1 - index / 10);
     const point = placeNewLink({
       visualSeed: link.visual_seed,
       existingCount: index,
       occupied,
+      centerBias,
     });
     occupied.push(toOccupiedBox(point));
     return {

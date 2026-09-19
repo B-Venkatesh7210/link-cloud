@@ -22,6 +22,8 @@ import {
   homeFocusPoint,
   sortLinksForCloud,
   packRankedPositions,
+  placeInEmptySpace,
+  HOME_STAGE,
   BUBBLE_FOOTPRINT,
 } from "@/lib/cloud/layout";
 import { parseLinksFile } from "@/lib/import/parse-links-file";
@@ -184,8 +186,31 @@ describe("layout collision", () => {
         )
       )
     );
-    // First ring + footprint should stay well inside a typical desktop frame.
-    expect(maxDist).toBeLessThan(520);
+    // First placements should stay inside / near the home stage.
+    expect(maxDist).toBeLessThan(780);
+  });
+
+  it("prefers an empty on-screen gap over the far edge", () => {
+    // Crowded left edge; leave a clear pocket near the middle-right of home stage.
+    const occupied = [
+      toOccupiedBox({ x: -520, y: -80 }),
+      toOccupiedBox({ x: -520, y: 80 }),
+      toOccupiedBox({ x: -220, y: -80 }),
+      toOccupiedBox({ x: -220, y: 80 }),
+    ];
+    const placed = placeInEmptySpace({
+      occupied,
+      visualSeed: 42,
+      centerBias: 0.15,
+    });
+    const cx = placed.x + BUBBLE_FOOTPRINT.medium.width / 2;
+    const cy = placed.y + BUBBLE_FOOTPRINT.medium.height / 2;
+    expect(cx).toBeGreaterThan(HOME_STAGE.minX);
+    expect(cx).toBeLessThan(HOME_STAGE.maxX);
+    expect(cy).toBeGreaterThan(HOME_STAGE.minY);
+    expect(cy).toBeLessThan(HOME_STAGE.maxY);
+    // Should not jump to the far left cluster.
+    expect(cx).toBeGreaterThan(-100);
   });
 
   it("builds a finite translate extent from content", () => {
