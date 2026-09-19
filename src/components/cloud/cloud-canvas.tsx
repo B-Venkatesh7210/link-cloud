@@ -1,11 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useDeferredValue, type MutableRefObject } from "react";
 import {
   ReactFlow,
   ReactFlowProvider,
   useReactFlow,
   useNodesInitialized,
+  useStore,
   applyNodeChanges,
   type Node,
   type OnNodeDrag,
@@ -20,6 +21,7 @@ import { useAppState } from "@/components/app-shell/app-state";
 import { CloudEmptyState } from "@/components/cloud/cloud-empty-state";
 import { LinkDetailPanel } from "@/components/cloud/link-detail-panel";
 import {
+  BUBBLE_SOLID_ZOOM,
   UrlBubbleNode,
   type UrlBubbleFlowNode,
 } from "@/components/cloud/url-bubble-node";
@@ -34,6 +36,7 @@ import {
   searchStageCenter,
   toOccupiedBox,
 } from "@/lib/cloud/layout";
+import { CLOUD_DENSE_COUNT, CLOUD_MIN_ZOOM } from "@/lib/cloud/perf";
 import {
   archiveLinkAction,
   recordLinkOpenAction,
@@ -43,6 +46,7 @@ import {
 import { presentLinks, topSearchMatch } from "@/lib/search/fuse";
 import type { UrlBubbleNodeData } from "@/lib/cloud/types";
 import type { LinkWithTags } from "@/lib/types";
+import { cn } from "@/lib/utils";
 
 const nodeTypes: NodeTypes = {
   urlBubble: UrlBubbleNode,
@@ -142,6 +146,23 @@ function CameraController({
   return null;
 }
 
+/** Softens or disables the edge veil when zoomed out / dense (backdrop-filter is costly). */
+function EdgeVeil({ dense }: { dense: boolean }) {
+  const soft = useStore(
+    (state) => state.transform[2] < BUBBLE_SOLID_ZOOM || dense
+  );
+
+  return (
+    <div
+      className={cn(
+        "linkcloud-edge-veil",
+        soft && "linkcloud-edge-veil--soft"
+      )}
+      aria-hidden
+    />
+  );
+}
+
 /** Centers the viewport on the #1 search hit so it reads as the main stage. */
 function SearchFocusCamera({
   searching,
@@ -218,9 +239,14 @@ function CloudCanvasInner() {
     () => presentLinks(activeLinks, deferredQuery, { mobile: isMobile }),
     [activeLinks, deferredQuery, isMobile]
   );
+  // Under load, keep the previous layout on screen while search/present catches up.
+  const deferredPresented = useDeferredValue(presented);
 
   const searching = Boolean(deferredQuery.trim());
-  const matchedCount = presented.filter((p) => p.matched && searching).length;
+  const matchedCount = deferredPresented.filter(
+    (p) => p.matched && searching
+  ).length;
+  const dense = activeLinks.length >= CLOUD_DENSE_COUNT;
   const selectedLink =
     activeLinks.find((link) => link.id === selectedLinkId) ?? null;
 
@@ -416,11 +442,11 @@ function CloudCanvasInner() {
     if (draggingRef.current) return;
 
     const shouldAnimatePositions =
-      searching || wasSearchingRef.current;
+      !dense && (searching || wasSearchingRef.current);
     wasSearchingRef.current = searching;
 
     setNodes(() => {
-      return presented.map((item) => {
+      return deferredPresented.map((item) => {
         const data: UrlBubbleNodeData = {
           link: item,
           scale: item.scale,
@@ -431,6 +457,7 @@ function CloudCanvasInner() {
           selected: selectedLinkId === item.id,
           isMobile,
           recentEmphasis: item.recentEmphasis,
+          dense,
           onSelect: (id) => handlersRef.current.handleSelect(id),
           onOpen: (id) => handlersRef.current.handleOpen(id),
           onToggleFavorite: (id, next) =>
@@ -462,7 +489,7 @@ function CloudCanvasInner() {
         } satisfies UrlBubbleFlowNode;
       });
     });
-  }, [presented, searching, selectedLinkId, isMobile, canDrag]);
+  }, [deferredPresented, searching, selectedLinkId, isMobile, canDrag, dense]);
 
   const onNodesChange: OnNodesChange = useCallback((changes) => {
     setNodes((current) => applyNodeChanges(changes, current) as UrlBubbleFlowNode[]);
@@ -548,13 +575,15 @@ function CloudCanvasInner() {
         zoomOnPinch
         panOnDrag
         selectionOnDrag={false}
-        minZoom={0.35}
+        minZoom={CLOUD_MIN_ZOOM}
         maxZoom={2.2}
         translateExtent={translateExtent}
         proOptions={{ hideAttribution: true }}
         defaultViewport={{ x: 0, y: 0, zoom: 1 }}
         className="linkcloud-flow bg-transparent!"
-        onlyRenderVisibleElements={activeLinks.length > 80}
+        onlyRenderVisibleElements
+        elevateNodesOnSelect={false}
+        nodesFocusable={false}
       >
         <CameraController
           layoutKey={layoutKey}
@@ -574,7 +603,7 @@ function CloudCanvasInner() {
         {activeLinks.length > 0 ? <ViewportControls homeFocus={homeFocus} /> : null}
       </ReactFlow>
 
-      <div className="linkcloud-edge-veil" aria-hidden />
+      <EdgeVeil dense={dense} />
 
       {activeLinks.length === 0 ? (
         <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center px-6">

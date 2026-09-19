@@ -2,6 +2,7 @@
 
 import { LocateFixed, Minus, Plus, Maximize2 } from "lucide-react";
 import { useReactFlow } from "@xyflow/react";
+import { CLOUD_MIN_ZOOM } from "@/lib/cloud/perf";
 import { Button } from "@/components/ui/button";
 
 export function ViewportControls({
@@ -57,7 +58,7 @@ export function ViewportControls({
               padding: 0.18,
               duration: 320,
               maxZoom: 1.05,
-              minZoom: 0.3,
+              minZoom: CLOUD_MIN_ZOOM,
             })
           }
         >

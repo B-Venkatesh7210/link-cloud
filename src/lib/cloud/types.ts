@@ -11,6 +11,8 @@ export type UrlBubbleNodeData = {
   selected: boolean;
   isMobile: boolean;
   recentEmphasis?: boolean;
+  /** Many links — prefer solid fills / cheaper paint even near home zoom. */
+  dense?: boolean;
   onSelect: (id: string) => void;
   onOpen: (id: string) => void;
   onToggleFavorite: (id: string, next: boolean) => void;
