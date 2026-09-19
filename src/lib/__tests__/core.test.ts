@@ -32,6 +32,7 @@ import {
   fallbackAccentFromSeed,
   isUsableBrandAccent,
   needsAccentEnrichment,
+  needsLinkVisualEnrichment,
 } from "@/lib/cloud/accent-color";
 import type { LinkWithTags } from "@/lib/types";
 
@@ -304,6 +305,21 @@ describe("accent color", () => {
     expect(isUsableBrandAccent("#0066cc")).toBe(true);
     expect(needsAccentEnrichment("#000")).toBe(true);
     expect(needsAccentEnrichment("#3366ff")).toBe(false);
+  });
+
+  it("queues enrichment when favicon is missing even if accent exists", () => {
+    expect(
+      needsLinkVisualEnrichment({
+        accent_color: "#3366ff",
+        favicon_url: null,
+      })
+    ).toBe(true);
+    expect(
+      needsLinkVisualEnrichment({
+        accent_color: "#3366ff",
+        favicon_url: "https://example.com/favicon.ico",
+      })
+    ).toBe(false);
   });
 
   it("builds a light fill and darker border from an accent", () => {

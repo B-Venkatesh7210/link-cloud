@@ -48,6 +48,44 @@ async function resolveAccentForUrl(
   return fallbackAccentFromSeed(visualSeed);
 }
 
+async function resolveLinkVisuals(
+  url: string,
+  visualSeed: number,
+  options?: {
+    existingAccent?: string | null;
+    existingFavicon?: string | null;
+  }
+): Promise<{ accent_color: string; favicon_url: string | null }> {
+  const existingAccent = normalizeAccentHex(options?.existingAccent);
+  const existingFavicon = options?.existingFavicon?.trim() || null;
+  const needsAccent = !existingAccent || !isUsableBrandAccent(existingAccent);
+  const needsFavicon = !existingFavicon;
+
+  if (!needsAccent && !needsFavicon) {
+    return { accent_color: existingAccent!, favicon_url: existingFavicon };
+  }
+
+  const metadata = await fetchUrlMetadata(url);
+  const accent_color = needsAccent
+    ? metadata?.themeColor && isUsableBrandAccent(metadata.themeColor)
+      ? metadata.themeColor
+      : fallbackAccentFromSeed(visualSeed)
+    : existingAccent!;
+
+  const favicon_url = needsFavicon
+    ? metadata?.faviconUrl ??
+      (() => {
+        try {
+          return new URL("/favicon.ico", metadata?.finalUrl ?? url).toString();
+        } catch {
+          return null;
+        }
+      })()
+    : existingFavicon;
+
+  return { accent_color, favicon_url };
+}
+
 async function requireUserId() {
   const supabase = await createClient();
   const {
@@ -722,12 +760,14 @@ export async function deleteLinkAction(
 }
 
 /**
- * Lazy-fill brand accent for an existing link (theme-color or seed fallback).
- * No revalidate — callers patch local state.
+ * Lazy-fill brand accent + favicon for an existing link.
+ * Used after bulk import and for older rows. No revalidate — callers patch local state.
  */
 export async function enrichLinkAccentAction(
   linkId: string
-): Promise<ActionResult<{ id: string; accent_color: string }>> {
+): Promise<
+  ActionResult<{ id: string; accent_color: string; favicon_url: string | null }>
+> {
   const { supabase, userId } = await requireUserId();
   if (!userId) {
     return { success: false, error: "Please sign in to continue.", code: "UNAUTHORIZED" };
@@ -744,7 +784,7 @@ export async function enrichLinkAccentAction(
 
   const { data: existing, error: fetchError } = await supabase
     .from("links")
-    .select("id, url, accent_color, visual_seed")
+    .select("id, url, accent_color, favicon_url, visual_seed")
     .eq("id", linkId)
     .eq("user_id", userId)
     .maybeSingle();
@@ -753,32 +793,61 @@ export async function enrichLinkAccentAction(
     return { success: false, error: "Link not found.", code: "NOT_FOUND" };
   }
 
-  const already = normalizeAccentHex(existing.accent_color as string | null);
-  if (already && isUsableBrandAccent(already)) {
-    return { success: true, data: { id: linkId, accent_color: already } };
+  const alreadyAccent = normalizeAccentHex(existing.accent_color as string | null);
+  const alreadyFavicon =
+    typeof existing.favicon_url === "string" && existing.favicon_url.trim()
+      ? existing.favicon_url.trim()
+      : null;
+
+  if (
+    alreadyAccent &&
+    isUsableBrandAccent(alreadyAccent) &&
+    alreadyFavicon
+  ) {
+    return {
+      success: true,
+      data: {
+        id: linkId,
+        accent_color: alreadyAccent,
+        favicon_url: alreadyFavicon,
+      },
+    };
   }
 
-  const accent_color = await resolveAccentForUrl(
+  const visuals = await resolveLinkVisuals(
     existing.url as string,
     (existing.visual_seed as number) ?? 1,
-    null
+    {
+      existingAccent: existing.accent_color as string | null,
+      existingFavicon: alreadyFavicon,
+    }
   );
 
   const { error } = await supabase
     .from("links")
-    .update({ accent_color })
+    .update({
+      accent_color: visuals.accent_color,
+      favicon_url: visuals.favicon_url,
+    })
     .eq("id", linkId)
     .eq("user_id", userId);
 
   if (error) {
     return {
       success: false,
-      error: "Couldn't save accent color.",
+      error: "Couldn't save link visuals.",
       code: "UNKNOWN",
     };
   }
 
-  return { success: true, data: { id: linkId, accent_color } };
+  return {
+    success: true,
+    data: {
+      id: linkId,
+      accent_color: visuals.accent_color,
+      favicon_url: visuals.favicon_url,
+    },
+  };
 }
 
 export async function recordLinkOpenAction(

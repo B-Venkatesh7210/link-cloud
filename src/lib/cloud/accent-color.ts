@@ -118,6 +118,19 @@ export function needsAccentEnrichment(
   return !isUsableBrandAccent(accent);
 }
 
+/** Accent and/or favicon still need a lazy metadata pass. */
+export function needsLinkVisualEnrichment(link: {
+  accent_color?: string | null;
+  favicon_url?: string | null;
+  archived_at?: string | null;
+}): boolean {
+  if (link.archived_at) return false;
+  return (
+    needsAccentEnrichment(link.accent_color) ||
+    !link.favicon_url?.trim()
+  );
+}
+
 function mixWithWhite(
   rgb: { r: number; g: number; b: number },
   amount: number

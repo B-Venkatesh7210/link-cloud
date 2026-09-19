@@ -2,15 +2,15 @@
 
 import { useEffect, useRef } from "react";
 import { useAppState } from "@/components/app-shell/app-state";
-import { needsAccentEnrichment } from "@/lib/cloud/accent-color";
+import { needsLinkVisualEnrichment } from "@/lib/cloud/accent-color";
 import { enrichLinkAccentAction } from "@/lib/links/actions";
 
 const CONCURRENCY = 2;
 const GAP_MS = 450;
 
 /**
- * Quietly fills / refreshes accent_color for links on the canvas
- * (missing colors, black theme-colors, and bulk imports).
+ * Quietly fills accent_color + favicon_url for links on the canvas
+ * (missing visuals after bulk import, black theme-colors, older rows).
  */
 export function AccentColorBackfill() {
   const { links, setLinks } = useAppState();
@@ -23,8 +23,7 @@ export function AccentColorBackfill() {
     const needing = links
       .filter(
         (link) =>
-          needsAccentEnrichment(link.accent_color) &&
-          !link.archived_at &&
+          needsLinkVisualEnrichment(link) &&
           !inFlightRef.current.has(link.id) &&
           !failedRef.current.has(link.id)
       )
@@ -55,7 +54,11 @@ export function AccentColorBackfill() {
                 setLinks((prev) =>
                   prev.map((link) =>
                     link.id === id
-                      ? { ...link, accent_color: result.data.accent_color }
+                      ? {
+                          ...link,
+                          accent_color: result.data.accent_color,
+                          favicon_url: result.data.favicon_url,
+                        }
                       : link
                   )
                 );

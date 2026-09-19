@@ -113,6 +113,19 @@ function extractFavicon(html: string, baseUrl: URL): string | null {
   }
 }
 
+/** Best-effort favicon URL for a page (HTML icon, else /favicon.ico). */
+export function resolveFaviconUrl(
+  pageFavicon: string | null | undefined,
+  pageUrl: string
+): string | null {
+  if (pageFavicon?.trim()) return pageFavicon.trim();
+  try {
+    return new URL("/favicon.ico", pageUrl).toString();
+  } catch {
+    return null;
+  }
+}
+
 function extractThemeColor(html: string): string | null {
   const candidates = [
     extractMeta(html, "theme-color"),
@@ -222,11 +235,12 @@ export async function fetchUrlMetadata(
       );
       const siteName = truncate(extractMeta(html, "og:site_name"), 120);
       const pageFavicon = extractFavicon(html, current);
+      const faviconUrl = resolveFaviconUrl(pageFavicon, current.toString());
       let themeColor = extractThemeColor(html);
 
       if (!themeColor) {
         themeColor = await sampleFaviconAccent(
-          pageFavicon,
+          faviconUrl ?? pageFavicon,
           current.toString()
         );
       }
@@ -235,7 +249,7 @@ export async function fetchUrlMetadata(
         title,
         description,
         siteName,
-        faviconUrl: pageFavicon,
+        faviconUrl,
         themeColor,
         finalUrl: current.toString(),
         hostname: current.hostname,
