@@ -12,6 +12,7 @@ type LinkRow = {
   description: string | null;
   notes: string | null;
   favicon_url: string | null;
+  accent_color: string | null;
   position_x: number;
   position_y: number;
   visual_seed: number;
@@ -44,6 +45,7 @@ function mapLinkWithTags(row: LinkRow): LinkWithTags {
     description: row.description,
     notes: row.notes,
     favicon_url: row.favicon_url,
+    accent_color: row.accent_color ?? null,
     position_x: row.position_x,
     position_y: row.position_y,
     visual_seed: row.visual_seed,

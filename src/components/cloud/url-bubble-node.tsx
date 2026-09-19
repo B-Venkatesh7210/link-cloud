@@ -12,6 +12,7 @@ import {
   Star,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { bubbleSurfaceFromAccent } from "@/lib/cloud/accent-color";
 import { domainAvatarStyle } from "@/lib/cloud/domain-avatar";
 import { bubbleTiltDegrees } from "@/lib/cloud/sizing";
 import type { UrlBubbleNodeData } from "@/lib/cloud/types";
@@ -98,6 +99,7 @@ function UrlBubbleNodeComponent({ data, selected }: NodeProps<UrlBubbleFlowNode>
   const baseTilt = bubbleTiltDegrees(link.visual_seed);
   // Straighten while searching or selected so the card stays readable / usable.
   const tilt = searching || active ? 0 : baseTilt;
+  const surface = bubbleSurfaceFromAccent(link.accent_color);
 
   useEffect(() => {
     return () => {
@@ -175,16 +177,19 @@ function UrlBubbleNodeComponent({ data, selected }: NodeProps<UrlBubbleFlowNode>
           }
         }}
         className={cn(
-          "relative flex w-[280px] max-w-[320px] cursor-pointer items-start gap-2.5 rounded-[1.6rem] border bg-white/78 px-3.5 py-2.5 text-left shadow-[0_10px_30px_rgba(70,120,180,0.10)] outline-none backdrop-blur-[2px] transition-[box-shadow,border-color,background-color] duration-200",
-          "hover:-translate-y-0.5 hover:bg-white/90 hover:shadow-[0_16px_40px_rgba(70,120,180,0.16)]",
+          "relative flex w-[280px] max-w-[320px] cursor-pointer items-start gap-2.5 rounded-[1.6rem] border px-3.5 py-2.5 text-left outline-none backdrop-blur-[2px] transition-[box-shadow,border-color,background-color,transform] duration-200",
+          "hover:-translate-y-0.5",
           "focus-visible:ring-2 focus-visible:ring-sky-300/80",
-          active
-            ? "border-sky-300/90 ring-2 ring-sky-200/70"
-            : "border-white/80",
+          active ? "ring-2 ring-sky-200/70" : null,
           recentEmphasis && !searching && "ring-1 ring-sky-200/50",
           scale >= 1.25 && "w-[320px] rounded-[1.85rem] px-4 py-3",
           scale < 0.95 && "w-[240px] rounded-[1.4rem] px-3 py-2"
         )}
+        style={{
+          backgroundColor: surface.background,
+          borderColor: active ? "rgba(125, 211, 252, 0.9)" : surface.border,
+          boxShadow: surface.shadow,
+        }}
       >
         {link.is_favorite ? (
           <span

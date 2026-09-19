@@ -23,8 +23,30 @@ import {
   occupiedFromLinks,
 } from "@/lib/helpers";
 import { BUBBLE_FOOTPRINT, packRankedPositions } from "@/lib/cloud/layout";
+import {
+  fallbackAccentFromSeed,
+  isUsableBrandAccent,
+  normalizeAccentHex,
+} from "@/lib/cloud/accent-color";
+import { fetchUrlMetadata } from "@/lib/metadata/fetch-metadata";
+import { takeRateLimitToken } from "@/lib/metadata/rate-limit";
 import { APP_ROUTES } from "@/config/app";
 import { getLinksForCurrentUser } from "@/lib/links/queries";
+
+async function resolveAccentForUrl(
+  url: string,
+  visualSeed: number,
+  provided?: string | null
+): Promise<string> {
+  const fromInput = normalizeAccentHex(provided);
+  if (fromInput && isUsableBrandAccent(fromInput)) return fromInput;
+
+  const metadata = await fetchUrlMetadata(url);
+  if (metadata?.themeColor && isUsableBrandAccent(metadata.themeColor)) {
+    return metadata.themeColor;
+  }
+  return fallbackAccentFromSeed(visualSeed);
+}
 
 async function requireUserId() {
   const supabase = await createClient();
@@ -203,6 +225,19 @@ export async function createLinkAction(
   const position_x = parsed.data.position_x ?? position.position_x;
   const position_y = parsed.data.position_y ?? position.position_y;
 
+  // If the client already resolved a usable accent, keep it; otherwise fetch.
+  const providedAccent = normalizeAccentHex(parsed.data.accent_color);
+  const accent_color =
+    parsed.data.accent_color !== undefined &&
+    providedAccent &&
+    isUsableBrandAccent(providedAccent)
+      ? providedAccent
+      : await resolveAccentForUrl(
+          normalized.normalized,
+          position.visual_seed,
+          undefined
+        );
+
   try {
     const { data: link, error } = await supabase
       .from("links")
@@ -218,6 +253,7 @@ export async function createLinkAction(
         page_title: parsed.data.page_title ?? null,
         description: parsed.data.description ?? null,
         favicon_url: parsed.data.favicon_url ?? normalized.faviconUrl,
+        accent_color,
         position_x,
         position_y,
         visual_seed: position.visual_seed,
@@ -335,6 +371,7 @@ export async function createLinksBulkAction(
       existingCount,
       occupied,
     });
+    const accent_color = normalizeAccentHex(parsed.data.accent_color);
 
     try {
       const { data: link, error } = await supabase
@@ -351,6 +388,7 @@ export async function createLinksBulkAction(
           page_title: parsed.data.page_title ?? null,
           description: parsed.data.description ?? null,
           favicon_url: parsed.data.favicon_url ?? normalized.faviconUrl,
+          accent_color,
           position_x: position.position_x,
           position_y: position.position_y,
           visual_seed: position.visual_seed,
@@ -681,6 +719,66 @@ export async function deleteLinkAction(
 
   revalidateApp();
   return { success: true, data: { id: linkId } };
+}
+
+/**
+ * Lazy-fill brand accent for an existing link (theme-color or seed fallback).
+ * No revalidate — callers patch local state.
+ */
+export async function enrichLinkAccentAction(
+  linkId: string
+): Promise<ActionResult<{ id: string; accent_color: string }>> {
+  const { supabase, userId } = await requireUserId();
+  if (!userId) {
+    return { success: false, error: "Please sign in to continue.", code: "UNAUTHORIZED" };
+  }
+
+  const limited = takeRateLimitToken(`accent:${userId}`, 40, 60_000);
+  if (!limited.ok) {
+    return {
+      success: false,
+      error: "Too many accent requests. Try again shortly.",
+      code: "UNKNOWN",
+    };
+  }
+
+  const { data: existing, error: fetchError } = await supabase
+    .from("links")
+    .select("id, url, accent_color, visual_seed")
+    .eq("id", linkId)
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (fetchError || !existing) {
+    return { success: false, error: "Link not found.", code: "NOT_FOUND" };
+  }
+
+  const already = normalizeAccentHex(existing.accent_color as string | null);
+  if (already && isUsableBrandAccent(already)) {
+    return { success: true, data: { id: linkId, accent_color: already } };
+  }
+
+  const accent_color = await resolveAccentForUrl(
+    existing.url as string,
+    (existing.visual_seed as number) ?? 1,
+    null
+  );
+
+  const { error } = await supabase
+    .from("links")
+    .update({ accent_color })
+    .eq("id", linkId)
+    .eq("user_id", userId);
+
+  if (error) {
+    return {
+      success: false,
+      error: "Couldn't save accent color.",
+      code: "UNKNOWN",
+    };
+  }
+
+  return { success: true, data: { id: linkId, accent_color } };
 }
 
 export async function recordLinkOpenAction(

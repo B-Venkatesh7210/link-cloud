@@ -13,6 +13,7 @@ import {
 } from "@/components/links/add-link-dialog";
 import { ImportQueueDialog } from "@/components/links/import-queue-dialog";
 import { ImportSessionBootstrap } from "@/components/links/import-session-bootstrap";
+import { AccentColorBackfill } from "@/components/links/accent-color-backfill";
 import type { LinkWithTags, Profile } from "@/lib/types";
 
 export function AppShell({
@@ -37,6 +38,7 @@ export function AppShell({
         <EditLinkDialog />
         <ImportQueueDialog />
         <ImportSessionBootstrap />
+        <AccentColorBackfill />
         <GlobalShortcuts />
       </div>
     </AppStateProvider>

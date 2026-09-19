@@ -1,5 +1,10 @@
 import { lookup } from "node:dns/promises";
 import { isBlockedHostname, isPrivateOrReservedIp } from "@/lib/metadata/ssrf";
+import {
+  isUsableBrandAccent,
+  normalizeAccentHex,
+} from "@/lib/cloud/accent-color";
+import { sampleFaviconAccent } from "@/lib/metadata/sample-favicon-color";
 import { normalizeUrl, UrlNormalizationError } from "@/lib/normalize-url";
 
 export type UrlMetadata = {
@@ -7,6 +12,7 @@ export type UrlMetadata = {
   description: string | null;
   siteName: string | null;
   faviconUrl: string | null;
+  themeColor: string | null;
   finalUrl: string;
   hostname: string;
 };
@@ -107,6 +113,18 @@ function extractFavicon(html: string, baseUrl: URL): string | null {
   }
 }
 
+function extractThemeColor(html: string): string | null {
+  const candidates = [
+    extractMeta(html, "theme-color"),
+    extractMeta(html, "msapplication-TileColor"),
+  ];
+  for (const candidate of candidates) {
+    const hex = normalizeAccentHex(candidate);
+    if (hex && isUsableBrandAccent(hex)) return hex;
+  }
+  return null;
+}
+
 async function safeFetchOnce(url: URL): Promise<Response> {
   await resolveAndValidateHost(url.hostname);
 
@@ -204,12 +222,21 @@ export async function fetchUrlMetadata(
       );
       const siteName = truncate(extractMeta(html, "og:site_name"), 120);
       const pageFavicon = extractFavicon(html, current);
+      let themeColor = extractThemeColor(html);
+
+      if (!themeColor) {
+        themeColor = await sampleFaviconAccent(
+          pageFavicon,
+          current.toString()
+        );
+      }
 
       return {
         title,
         description,
         siteName,
         faviconUrl: pageFavicon,
+        themeColor,
         finalUrl: current.toString(),
         hostname: current.hostname,
       };

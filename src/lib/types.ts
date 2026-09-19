@@ -25,6 +25,7 @@ export type Link = {
   description: string | null;
   notes: string | null;
   favicon_url: string | null;
+  accent_color: string | null;
   position_x: number;
   position_y: number;
   visual_seed: number;
@@ -50,6 +51,7 @@ export type CreateLinkInput = {
   page_title?: string | null;
   description?: string | null;
   favicon_url?: string | null;
+  accent_color?: string | null;
 };
 
 export type UpdateLinkInput = {

@@ -103,6 +103,7 @@ export async function seedDemoLinksAction(): Promise<
         hostname: new URL(demo.url).hostname,
         notes: demo.notes ?? null,
         favicon_url: null,
+        accent_color: null,
         position_x: point.x,
         position_y: point.y,
         visual_seed: seed,

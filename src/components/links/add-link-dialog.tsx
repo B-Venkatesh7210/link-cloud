@@ -103,10 +103,12 @@ function LinkForm({
     page_title: string | null;
     description: string | null;
     favicon_url: string | null;
+    accent_color: string | null;
   }>({
     page_title: initialLink?.page_title ?? null,
     description: initialLink?.description ?? null,
     favicon_url: initialLink?.favicon_url ?? null,
+    accent_color: initialLink?.accent_color ?? null,
   });
   const labelTouchedRef = useRef(Boolean(initialLink));
   const labelRef = useRef<HTMLInputElement | null>(null);
@@ -172,6 +174,7 @@ function LinkForm({
         page_title: result.data.metadata?.title ?? null,
         description: result.data.metadata?.description ?? null,
         favicon_url: result.data.metadata?.faviconUrl ?? null,
+        accent_color: result.data.metadata?.themeColor ?? null,
       });
 
       if (!labelTouchedRef.current && result.data.suggestedLabel) {
@@ -230,6 +233,7 @@ function LinkForm({
         page_title: metaFields.page_title,
         description: metaFields.description,
         favicon_url: metaFields.favicon_url,
+        accent_color: metaFields.accent_color,
       });
 
       if (!result.success) {

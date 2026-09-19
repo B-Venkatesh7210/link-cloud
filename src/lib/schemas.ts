@@ -46,6 +46,12 @@ export const createLinkSchema = z.object({
   page_title: z.string().trim().max(300).optional().nullable(),
   description: z.string().trim().max(1000).optional().nullable(),
   favicon_url: z.string().trim().max(2048).optional().nullable(),
+  accent_color: z
+    .string()
+    .trim()
+    .regex(/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/, "Invalid accent color")
+    .optional()
+    .nullable(),
 });
 
 /** Form-facing schema without defaults (cleaner RHF typing). */

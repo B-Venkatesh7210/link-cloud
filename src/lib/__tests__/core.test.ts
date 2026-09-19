@@ -26,6 +26,13 @@ import {
 } from "@/lib/cloud/layout";
 import { parseLinksFile } from "@/lib/import/parse-links-file";
 import { bubbleTiltDegrees } from "@/lib/cloud/sizing";
+import {
+  bubbleSurfaceFromAccent,
+  normalizeAccentHex,
+  fallbackAccentFromSeed,
+  isUsableBrandAccent,
+  needsAccentEnrichment,
+} from "@/lib/cloud/accent-color";
 import type { LinkWithTags } from "@/lib/types";
 
 function fakeLink(partial: Partial<LinkWithTags> & Pick<LinkWithTags, "id" | "label">): LinkWithTags {
@@ -38,6 +45,7 @@ function fakeLink(partial: Partial<LinkWithTags> & Pick<LinkWithTags, "id" | "la
     description: null,
     notes: null,
     favicon_url: null,
+    accent_color: null,
     position_x: 0,
     position_y: 0,
     visual_seed: 1,
@@ -279,6 +287,30 @@ describe("bubble tilt", () => {
       expect(deg).toBeLessThanOrEqual(10);
     }
     expect(new Set(samples).size).toBeGreaterThan(1);
+  });
+});
+
+describe("accent color", () => {
+  it("normalizes hex and rgb theme colors", () => {
+    expect(normalizeAccentHex("#0af")).toBe("#00aaff");
+    expect(normalizeAccentHex("#112233")).toBe("#112233");
+    expect(normalizeAccentHex("rgb(17, 34, 51)")).toBe("#112233");
+    expect(normalizeAccentHex("default")).toBeNull();
+  });
+
+  it("rejects black / near-black theme colors as unusable", () => {
+    expect(isUsableBrandAccent("#000000")).toBe(false);
+    expect(isUsableBrandAccent("#111111")).toBe(false);
+    expect(isUsableBrandAccent("#0066cc")).toBe(true);
+    expect(needsAccentEnrichment("#000")).toBe(true);
+    expect(needsAccentEnrichment("#3366ff")).toBe(false);
+  });
+
+  it("builds a light fill and darker border from an accent", () => {
+    const surface = bubbleSurfaceFromAccent("#0066cc");
+    expect(surface.background).toMatch(/^rgba\(/);
+    expect(surface.border).toMatch(/^rgba\(/);
+    expect(fallbackAccentFromSeed(3)).toMatch(/^#[0-9a-f]{6}$/);
   });
 });
 
