@@ -12,11 +12,20 @@ import {
 import { toast } from "sonner";
 import type { ImportDraft } from "@/lib/import/parse-links-file";
 import { findLinkByUrl } from "@/lib/normalize-url";
+import type { Cluster } from "@/lib/clusters/types";
 import type { LinkWithTags } from "@/lib/types";
+
+export type CanvasMode = "cloud" | "clusters";
 
 type AppStateContextValue = {
   links: LinkWithTags[];
   setLinks: (links: LinkWithTags[] | ((prev: LinkWithTags[]) => LinkWithTags[])) => void;
+  clusters: Cluster[];
+  setClusters: (clusters: Cluster[] | ((prev: Cluster[]) => Cluster[])) => void;
+  canvasMode: CanvasMode;
+  setCanvasMode: (mode: CanvasMode) => void;
+  focusClusterId: string | null;
+  setFocusClusterId: (id: string | null) => void;
   searchQuery: string;
   setSearchQuery: (query: string) => void;
   selectedLinkId: string | null;
@@ -47,12 +56,17 @@ const AppStateContext = createContext<AppStateContextValue | null>(null);
 
 export function AppStateProvider({
   initialLinks,
+  initialClusters = [],
   children,
 }: {
   initialLinks: LinkWithTags[];
+  initialClusters?: Cluster[];
   children: ReactNode;
 }) {
   const [links, setLinks] = useState(initialLinks);
+  const [clusters, setClusters] = useState(initialClusters);
+  const [canvasMode, setCanvasMode] = useState<CanvasMode>("cloud");
+  const [focusClusterId, setFocusClusterId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedLinkId, setSelectedLinkId] = useState<string | null>(null);
   const [isAddLinkOpen, setIsAddLinkOpen] = useState(false);
@@ -71,6 +85,9 @@ export function AppStateProvider({
       setEditingLink(null);
       setIsImportOpen(false);
       setSelectedLinkId(link.id);
+      if (canvasMode === "clusters" && link.cluster_id) {
+        setFocusClusterId(link.cluster_id);
+      }
       const query = link.label.trim() || link.hostname || link.url;
       setSearchQuery(query);
       window.setTimeout(() => {
@@ -78,7 +95,7 @@ export function AppStateProvider({
         searchInputRef?.current?.select();
       }, 30);
     },
-    [searchInputRef]
+    [canvasMode, searchInputRef]
   );
 
   const openAddLink = useCallback(
@@ -183,6 +200,12 @@ export function AppStateProvider({
     () => ({
       links,
       setLinks,
+      clusters,
+      setClusters,
+      canvasMode,
+      setCanvasMode,
+      focusClusterId,
+      setFocusClusterId,
       searchQuery,
       setSearchQuery,
       selectedLinkId,
@@ -209,6 +232,9 @@ export function AppStateProvider({
     }),
     [
       links,
+      clusters,
+      canvasMode,
+      focusClusterId,
       searchQuery,
       selectedLinkId,
       isAddLinkOpen,

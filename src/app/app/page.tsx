@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { AppShell } from "@/components/app-shell/app-shell";
 import { APP_ROUTES } from "@/config/app";
+import { getClustersForCurrentUser } from "@/lib/clusters/queries";
 import {
   getCurrentProfile,
   getCurrentUser,
@@ -14,12 +15,18 @@ export default async function AppPage() {
     redirect(APP_ROUTES.login);
   }
 
-  const [profile, links] = await Promise.all([
+  const [profile, links, clusters] = await Promise.all([
     getCurrentProfile(),
     getLinksForCurrentUser(),
+    getClustersForCurrentUser(),
   ]);
 
   return (
-    <AppShell links={links} profile={profile} email={user.email} />
+    <AppShell
+      links={links}
+      clusters={clusters}
+      profile={profile}
+      email={user.email}
+    />
   );
 }

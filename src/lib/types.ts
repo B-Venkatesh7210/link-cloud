@@ -33,6 +33,10 @@ export type Link = {
   last_opened_at: string | null;
   is_favorite: boolean;
   archived_at: string | null;
+  cluster_id: string | null;
+  cluster_x: number | null;
+  cluster_y: number | null;
+  cluster_placement: "ai" | "user" | null;
   created_at: string;
   updated_at: string;
 };

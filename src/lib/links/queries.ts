@@ -20,6 +20,10 @@ type LinkRow = {
   last_opened_at: string | null;
   is_favorite: boolean;
   archived_at: string | null;
+  cluster_id: string | null;
+  cluster_x: number | null;
+  cluster_y: number | null;
+  cluster_placement: "ai" | "user" | null;
   created_at: string;
   updated_at: string;
   link_tags?: Array<{ tags: Tag | Tag[] | null }> | null;
@@ -53,6 +57,10 @@ function mapLinkWithTags(row: LinkRow): LinkWithTags {
     last_opened_at: row.last_opened_at,
     is_favorite: row.is_favorite,
     archived_at: row.archived_at,
+    cluster_id: row.cluster_id ?? null,
+    cluster_x: row.cluster_x ?? null,
+    cluster_y: row.cluster_y ?? null,
+    cluster_placement: row.cluster_placement ?? null,
     created_at: row.created_at,
     updated_at: row.updated_at,
     tags,
